@@ -237,6 +237,10 @@ class L2Space : public SpaceInterface<float> {
         data_size_ = dim * sizeof(float);
     }
 
+    size_t get_dim() override {
+        return dim_;
+    }
+
     size_t get_data_size() {
         return data_size_;
     }

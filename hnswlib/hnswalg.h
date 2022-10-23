@@ -9,6 +9,8 @@
 #include <unordered_set>
 #include <list>
 
+static bool adc = false;
+
 namespace hnswlib {
 typedef unsigned int tableint;
 typedef unsigned int linklistsizeint;
@@ -19,6 +21,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
     static const tableint max_update_element_locks = 65536;
     static const unsigned char DELETE_MARK = 0x01;
 
+    size_t dim_;
     size_t max_elements_{0};
     size_t cur_element_count{0};
     size_t size_data_per_element_{0};
@@ -48,12 +51,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
 
     size_t size_links_level0_{0};
     size_t offsetData_{0}, offsetLevel0_{0}, label_offset_{ 0 };
+    size_t offsetCode_;
 
     char *data_level0_memory_{nullptr};
     char **linkLists_{nullptr};
     std::vector<int> element_levels_;  // keeps level of each element
 
     size_t data_size_{0};
+    size_t code_size_;
 
     DISTFUNC<dist_t> fstdistfunc_;
     void *dist_func_param_{nullptr};
@@ -65,6 +70,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
 
     mutable std::atomic<long> metric_distance_computations{0};
     mutable std::atomic<long> metric_hops{0};
+
+    std::vector<float> min_val, max_val, diff_val;
 
 
     HierarchicalNSW(SpaceInterface<dist_t> *s) {
@@ -84,14 +91,16 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
         SpaceInterface<dist_t> *s,
         size_t max_elements,
         size_t M = 16,
-        size_t ef_construction = 200,
+        size_t ef_construction = 100,
         size_t random_seed = 100)
         : link_list_locks_(max_elements),
             link_list_update_locks_(max_update_element_locks),
             element_levels_(max_elements) {
+        dim_ = s->get_dim();
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
+        code_size_ = data_size_ / 4;
         fstdistfunc_ = s->get_dist_func();
         dist_func_param_ = s->get_dist_func_param();
         M_ = M;
@@ -104,9 +113,10 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
         update_probability_generator_.seed(random_seed + 1);
 
         size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
-        size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
+        size_data_per_element_ = size_links_level0_ + data_size_ + code_size_ + sizeof(labeltype);
         offsetData_ = size_links_level0_;
-        label_offset_ = size_links_level0_ + data_size_;
+        offsetCode_ = size_links_level0_ + data_size_;
+        label_offset_ = size_links_level0_ + data_size_ + code_size_;
         offsetLevel0_ = 0;
 
         data_level0_memory_ = (char *) malloc(max_elements_ * size_data_per_element_);
@@ -140,6 +150,146 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
         delete visited_list_pool_;
     }
 
+    void getCodes() {
+        min_val.assign(dim_, std::numeric_limits<float>::max());
+        max_val.assign(dim_, std::numeric_limits<float>::lowest());
+        diff_val.assign(dim_, 0.0);
+        for (tableint i = 0; i < cur_element_count; ++i) {
+            float* p = (float*)getDataByInternalId(i);
+            for (int j = 0; j < dim_; ++j) {
+                min_val[j] = std::min(min_val[j], p[j]);
+                max_val[j] = std::max(max_val[j], p[j]);
+            }
+            
+        } 
+        for (int j = 0; j < dim_; ++j) {
+            diff_val[j] = max_val[j] - min_val[j];
+        }
+        for (tableint i = 0; i < cur_element_count; ++i) {
+            float* p = (float*)getDataByInternalId(i);
+            uint8_t* q = (uint8_t*)getCodeByInternalId(i);
+            for (int j = 0; j < dim_; ++j) {
+                float x = (p[j] - min_val[j]) / diff_val[j];
+                if (x < 0.0) {
+                    x = 0.0;
+                }
+                if (x > 1.0) {
+                    x = 1.0;
+                }
+                q[j] = (int)(x * 255);
+            }
+        }
+        // for (tableint i = 0; i < cur_element_count; ++i) {
+        //     float* p = (float*)getDataByInternalId(i);
+        //     uint8_t* q = (uint8_t*)getCodeByInternalId(i);
+        //     for (int j = 0; j < dim_; ++j) {
+        //         q[j] = (uint8_t)p[j];
+        //     }
+        // }
+    }
+    static constexpr float f = 1.f / 255.f;
+    __m256 reconstruct(const uint8_t* code, int i) const {
+        uint64_t c8 = *(uint64_t*)(code + i);
+        __m128i c4lo = _mm_cvtepu8_epi32(_mm_set1_epi32(c8));
+        __m128i c4hi = _mm_cvtepu8_epi32(_mm_set1_epi32(c8 >> 32));
+        // __m256i i8 = _mm256_set_m128i(c4lo, c4hi);
+        __m256i i8 = _mm256_castsi128_si256(c4lo);
+        i8 = _mm256_insertf128_si256(i8, c4hi, 1);
+        __m256 f8 = _mm256_cvtepi32_ps(i8);
+        __m256 half = _mm256_set1_ps(0.5f);
+        f8 = _mm256_add_ps(f8, half);
+        __m256 one_255 = _mm256_set1_ps(f);
+        // __m256 one_255 = _mm256_set1_ps(1.f / 255.f);
+        __m256 yi = _mm256_mul_ps(f8, one_255);
+        // reconstruct 8 components
+        return _mm256_add_ps(
+            _mm256_loadu_ps(min_val.data() + i),
+            _mm256_mul_ps(yi, _mm256_loadu_ps(diff_val.data() + i)));
+    }
+
+    float SDCCode(const uint8_t* x, const uint8_t* y) const {
+        __m256 accu8 = _mm256_setzero_ps();
+        for (int i = 0; i < dim_; i += 8) {
+            auto xi = reconstruct(x, i);
+            auto yi = reconstruct(y, i);
+            __m256 tmp = _mm256_sub_ps(xi, yi);
+            accu8 = _mm256_add_ps(accu8, _mm256_mul_ps(tmp, tmp));
+        }
+        // get result
+        __m256 sum = _mm256_hadd_ps(accu8, accu8);
+        __m256 sum2 = _mm256_hadd_ps(sum, sum);
+        // now add the 0th and 4th component
+        return _mm_cvtss_f32(_mm256_castps256_ps128(sum2)) +
+                _mm_cvtss_f32(_mm256_extractf128_ps(sum2, 1));
+    }
+
+    float ADC1(const float* x, const uint8_t* y) const {
+        float result = 0.0;
+        for (int i = 0; i < dim_; ++i) {
+            float tmp = (y[i] + 0.5f) / 255.0f;
+            float X = min_val[i] + tmp * (diff_val[i]);
+            result += (x[i] - X) * (x[i] - X);
+        }
+        return result;
+    }
+
+    float ADC2(const float* x, const uint8_t* code) const {
+        __m256 accu8 = _mm256_setzero_ps();
+        for (int i = 0; i < dim_; i += 8) {
+            // decode 8 components
+            auto yi = reconstruct(code, i);
+            // add 8 components
+            __m256 xi = _mm256_loadu_ps(x + i);
+            __m256 tmp = _mm256_sub_ps(xi, yi);
+            accu8 = _mm256_add_ps(accu8, _mm256_mul_ps(tmp, tmp));
+        }
+
+        // get result
+        __m256 sum = _mm256_hadd_ps(accu8, accu8);
+        __m256 sum2 = _mm256_hadd_ps(sum, sum);
+        // now add the 0th and 4th component
+        return _mm_cvtss_f32(_mm256_castps256_ps128(sum2)) +
+                _mm_cvtss_f32(_mm256_extractf128_ps(sum2, 1));
+    }
+
+
+    class Timer {
+        std::chrono::high_resolution_clock::time_point time_begin;
+
+        public:
+        Timer() { time_begin = std::chrono::high_resolution_clock::now(); }
+
+        int64_t getElapsedTimeMicro() {
+            std::chrono::high_resolution_clock::time_point time_end =
+                std::chrono::high_resolution_clock::now();
+            return (std::chrono::duration_cast<std::chrono::nanoseconds>(time_end -
+                                                                        time_begin)
+                        .count());
+        }
+
+        void reset() { time_begin = std::chrono::high_resolution_clock::now(); }
+    };
+
+    mutable Timer timer;
+    mutable int64_t T = 0;
+    mutable int64_t cnt = 0;
+    inline float ADC(const float* x, const uint8_t* code) const {
+        // auto start = std::chrono::high_resolution_clock::now();
+        float ret = ADC2(x, code);
+        // auto end = std::chrono::high_resolution_clock::now();
+        // T += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+        // cnt++;
+        return ret;
+    }
+
+    inline float SDC(const void* x, const void* y) const {
+        // auto start = std::chrono::high_resolution_clock::now();
+        float ret = fstdistfunc_(x, y, dist_func_param_);
+        // auto end = std::chrono::high_resolution_clock::now();
+        // T += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+        // cnt++;
+        return ret;
+    }
 
     struct CompareByFirst {
         constexpr bool operator()(std::pair<dist_t, tableint> const& a,
@@ -173,6 +323,10 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
 
     inline char *getDataByInternalId(tableint internal_id) const {
         return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
+    }
+
+    inline uint8_t *getCodeByInternalId(tableint internal_id) const {
+        return (uint8_t*)(data_level0_memory_ + internal_id * size_data_per_element_ + offsetCode_);
     }
 
 
@@ -279,7 +433,13 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
         dist_t lowerBound;
         bool is_filter_disabled = std::is_same<filter_func_t, decltype(allowAllIds)>::value;
         if ((!has_deletions || !isMarkedDeleted(ep_id)) && (is_filter_disabled || isIdAllowed(getExternalLabel(ep_id)))) {
-            dist_t dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
+            dist_t dist;
+            if (adc) {
+                dist = ADC((float*)data_point, getCodeByInternalId(ep_id));
+            } else {
+                dist = SDC(data_point, getDataByInternalId(ep_id));
+                // dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
+            }
             lowerBound = dist;
             top_candidates.emplace(dist, ep_id);
             candidate_set.emplace(-dist, ep_id);
@@ -324,9 +484,13 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
 #endif
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
-
-                    char *currObj1 = (getDataByInternalId(candidate_id));
-                    dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                    dist_t dist;
+                    if (adc) {
+                        dist = ADC((float*)data_point, getCodeByInternalId(candidate_id));
+                    } else {
+                        dist = SDC(data_point, getDataByInternalId(candidate_id));
+                        // dist = fstdistfunc_(data_point, getDataByInternalId(candidate_id), dist_func_param_);
+                    }
 
                     if (top_candidates.size() < ef || lowerBound > dist) {
                         candidate_set.emplace(-dist, candidate_id);
@@ -568,13 +732,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
     void saveIndex(const std::string &location) {
         std::ofstream output(location, std::ios::binary);
         std::streampos position;
-
+        writeBinaryPOD(output, dim_);
         writeBinaryPOD(output, offsetLevel0_);
         writeBinaryPOD(output, max_elements_);
         writeBinaryPOD(output, cur_element_count);
         writeBinaryPOD(output, size_data_per_element_);
         writeBinaryPOD(output, label_offset_);
         writeBinaryPOD(output, offsetData_);
+        writeBinaryPOD(output, offsetCode_);
         writeBinaryPOD(output, maxlevel_);
         writeBinaryPOD(output, enterpoint_node_);
         writeBinaryPOD(output, maxM_);
@@ -607,6 +772,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
         std::streampos total_filesize = input.tellg();
         input.seekg(0, input.beg);
 
+        readBinaryPOD(input, dim_);
         readBinaryPOD(input, offsetLevel0_);
         readBinaryPOD(input, max_elements_);
         readBinaryPOD(input, cur_element_count);
@@ -618,6 +784,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
         readBinaryPOD(input, size_data_per_element_);
         readBinaryPOD(input, label_offset_);
         readBinaryPOD(input, offsetData_);
+        readBinaryPOD(input, offsetCode_);
         readBinaryPOD(input, maxlevel_);
         readBinaryPOD(input, enterpoint_node_);
 
@@ -1084,11 +1251,20 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
 
     std::priority_queue<std::pair<dist_t, labeltype >>
     searchKnn(const void *query_data, size_t k, filter_func_t& isIdAllowed = allowAllIds) const {
+        if (adc) {
+            k *= 1.2;
+        }
         std::priority_queue<std::pair<dist_t, labeltype >> result;
         if (cur_element_count == 0) return result;
 
         tableint currObj = enterpoint_node_;
-        dist_t curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
+        dist_t curdist;
+        if (adc) {
+            curdist = ADC((float*)query_data, getCodeByInternalId(enterpoint_node_));
+        } else {
+            curdist = SDC(query_data, getDataByInternalId(enterpoint_node_));
+            // curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
+        }
 
         for (int level = maxlevel_; level > 0; level--) {
             bool changed = true;
@@ -1106,7 +1282,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
                     tableint cand = datal[i];
                     if (cand < 0 || cand > max_elements_)
                         throw std::runtime_error("cand error");
-                    dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
+                    dist_t d;
+                    if (adc) {
+                        d = ADC((float*)query_data, getCodeByInternalId(cand));
+                    } else {
+                        d = SDC(query_data, getDataByInternalId(cand));
+                        // d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
+
+                    }
 
                     if (d < curdist) {
                         curdist = d;
@@ -1131,7 +1314,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
         }
         while (top_candidates.size() > 0) {
             std::pair<dist_t, tableint> rez = top_candidates.top();
-            result.push(std::pair<dist_t, labeltype>(rez.first, getExternalLabel(rez.second)));
+            dist_t dist = rez.second;
+            if (adc) {
+                dist = fstdistfunc_(query_data, getDataByInternalId(rez.second), dist_func_param_);
+            }
+            result.push(std::pair<dist_t, labeltype>(dist, getExternalLabel(rez.second)));
             top_candidates.pop();
         }
         return result;
@@ -1170,4 +1357,4 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t, filter_func_t> {
         std::cout << "integrity ok, checked " << connections_checked << " connections\n";
     }
 };
-}  // namespace hnswlib
+}  // namespace hnswlib// 

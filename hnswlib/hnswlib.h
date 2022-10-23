@@ -150,6 +150,8 @@ class SpaceInterface {
     // virtual void search(void *);
     virtual size_t get_data_size() = 0;
 
+    virtual size_t get_dim() {}
+
     virtual DISTFUNC<MTYPE> get_dist_func() = 0;
 
     virtual void *get_dist_func_param() = 0;
