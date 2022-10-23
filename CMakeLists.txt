@@ -28,6 +28,9 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     add_executable(main main.cpp sift_1b.cpp)
     target_link_libraries(main hnswlib)
 
-    add_executable(test_sift examples/test_sift.cpp)
-    target_link_libraries(test_sift hnswlib)
+    add_executable(sift_build examples/sift_build.cpp)
+    target_link_libraries(sift_build hnswlib)
+
+    add_executable(sift_query examples/sift_query.cpp)
+    target_link_libraries(sift_query hnswlib)
 endif()
