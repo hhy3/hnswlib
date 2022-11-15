@@ -6,23 +6,6 @@
 
 #include "hnswlib/hnswlib.h"
 
-class StopW {
-  std::chrono::high_resolution_clock::time_point time_begin;
-
- public:
-  StopW() { time_begin = std::chrono::high_resolution_clock::now(); }
-
-  float getElapsedTimeNano() {
-    std::chrono::high_resolution_clock::time_point time_end =
-        std::chrono::high_resolution_clock::now();
-    return (std::chrono::duration_cast<std::chrono::nanoseconds>(time_end -
-                                                                 time_begin)
-                .count());
-  }
-
-  void reset() { time_begin = std::chrono::high_resolution_clock::now(); }
-};
-
 using idx_t = hnswlib::labeltype;
 
 template <typename T>
@@ -44,16 +27,16 @@ void read_vecs(const std::string& filename, T*& data, int& nx, int& dim) {
 void TEST() {
   int nx, nq, dim, K;
   float *base;
-  read_vecs<float>("../../tests/data/siftsmall/siftsmall_base.fvecs", base, nx, dim);
+  read_vecs<float>("../../tests/data/sift/sift_base.fvecs", base, nx, dim);
 
   auto space = new hnswlib::L2Space(dim);
-  auto hnsw = new hnswlib::HierarchicalNSW<float>(space, nx);
+  auto hnsw = new hnswlib::HierarchicalNSW<float>(space, nx, 32, 100);
   hnsw->addPoint(&base[0], 0);
 #pragma omp parallel for schedule(dynamic)
   for (int i = 1; i < nx; ++i) {
     hnsw->addPoint(&base[i * dim], i);
   }
-  hnsw->saveIndex("hnswsmall.index");
+  hnsw->saveIndex("hnswflat.index");
   delete space;
   delete hnsw;
 }
