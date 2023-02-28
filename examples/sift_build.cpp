@@ -26,17 +26,18 @@ void read_vecs(const std::string& filename, T*& data, int& nx, int& dim) {
 
 void TEST() {
   int nx, nq, dim, K;
-  float *base;
+  float* base;
   read_vecs<float>("../../tests/data/sift/sift_base.fvecs", base, nx, dim);
 
-  auto space = new hnswlib::L2Space(dim);
-  auto hnsw = new hnswlib::HierarchicalNSW<float>(space, nx, 16, 100);
-  hnsw->addPoint(&base[0], 0);
-#pragma omp parallel for schedule(dynamic)
-  for (int i = 1; i < nx; ++i) {
-    hnsw->addPoint(&base[i * dim], i);
-  }
-  hnsw->saveIndex("hnsw_M16_C100.index");
+  auto space = new hnswlib::InnerProductSpace(dim);
+  auto hnsw = new hnswlib::HierarchicalNSW<float>(space, nx, 1, 96);
+  hnsw->build(base, nx, dim);
+  //   hnsw->addPoint(&base[0], 0);
+  // #pragma omp parallel for schedule(dynamic)
+  //   for (int i = 1; i < nx; ++i) {
+  //     hnsw->addPoint(&base[i * dim], i);
+  //   }
+  hnsw->saveIndex("hnsw_fuck.index");
   delete space;
   delete hnsw;
 }
