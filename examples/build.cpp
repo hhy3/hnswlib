@@ -32,10 +32,9 @@ void read_vecs(const std::string& filename, T*& data, int& nx, int& dim) {
 }
 
 void TEST() {
-  int nx = 1183514, nq, dim = 100, K;
+  int nx, nq, dim, K;
   float* base;
-  // read_vecs<float>("../../tests/data/sift/sift_base.fvecs", base, nx, dim);
-  read_fucks<float>("../../tests/data/glove/glove_base.vecs", base, nx, dim);
+  read_vecs<float>("../../tests/data/glove/glove_train.vecs", base, nx, dim);
 
   auto space = new hnswlib::InnerProductSpace(dim);
   auto hnsw = new hnswlib::HierarchicalNSW<float>(space, nx, 32, 100);

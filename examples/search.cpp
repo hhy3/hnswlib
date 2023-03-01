@@ -78,9 +78,9 @@ void TEST() {
   read_vecs<float>("../../tests/data/sift/sift_query.fvecs", query, nq, dim);
   read_vecs<int>("../../tests/data/sift/sift_groundtruth.ivecs", gt, nq, gt_k);
 
-  auto space = new hnswlib::L2Space(dim);
-  auto hnsw = new hnswlib::HierarchicalNSW<float>(space, "hnsw_M16_C100.index");
-  vector<int> efs = {24, 30, 36, 40, 50, 100};
+  auto space = new hnswlib::InnerProductSpace(dim);
+  auto hnsw = new hnswlib::HierarchicalNSW<float>(space, "glove_M32_C100.index");
+  vector<int> efs = {50, 100, 200};
   for (auto ef : efs) {
     hy::OnlineEV<double> ev;
     hnsw->setEf(ef);
