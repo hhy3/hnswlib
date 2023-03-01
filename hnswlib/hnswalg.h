@@ -681,7 +681,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
   }
 
   void loadIndex(const std::string &location, SpaceInterface<dist_t> *s,
-                 size_t max_elements_i = 0) {
+                 size_t max_elements_i = 0, bool IP = false) {
     std::ifstream input(location, std::ios::binary);
 
     if (!input.is_open()) throw std::runtime_error("Cannot open file");
@@ -744,6 +744,37 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       throw std::runtime_error(
           "Not enough memory: loadIndex failed to allocate level0");
     input.read(data_level0_memory_, cur_element_count * size_data_per_element_);
+
+    auto new_size = offsetData_ + data_size_;
+
+    char *data_tmp = (char *)malloc(max_elements * new_size);
+    auto ip = [](const float *x, int dim) {
+      float ans = 0.0;
+      for (int i = 0; i < dim; ++i) {
+        ans += x[i] * x[i];
+      }
+      return ans;
+    };
+    size_t dim = s->get_dim();
+    for (int i = 0; i < max_elements; ++i) {
+      char *p = data_tmp + i * new_size;
+      memcpy(p, get_linklist0(i), offsetData_);
+      int dim = s->get_dim();
+      float* vec_from = (float*)getDataByInternalId(i);
+      uint16_t *code_to = (uint16_t*)(p + offsetData_);
+      if (!IP) {
+        *(float *)code_to = ip(vec_from, dim);
+        code_to += 2;
+      }
+      for (int i = 0; i < dim; i += 8) {
+        auto x = _mm256_loadu_ps(vec_from + i);
+        auto y = _mm256_cvtps_ph(x, 0);
+        _mm_storeu_si128((__m128i *)(code_to + i), y);
+      }
+    }
+    free(data_level0_memory_);
+    data_level0_memory_ = data_tmp;
+    size_data_per_element_ = new_size;
 
     size_links_per_element_ =
         maxM_ * sizeof(tableint) + sizeof(linklistsizeint);

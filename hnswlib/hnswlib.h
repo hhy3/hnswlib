@@ -150,6 +150,8 @@ class SpaceInterface {
 
   virtual void *get_dist_func_param() = 0;
 
+  virtual int get_dim() = 0;
+
   virtual ~SpaceInterface() {}
 };
 
