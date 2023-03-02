@@ -174,20 +174,20 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       }
       return ans;
     };
-    size_t dim = s->get_dim();
-    dim_align = dim;
+    dim_align = s->get_dim();
     for (int i = 0; i < max_elements_; ++i) {
       char *p = data_tmp + i * new_size;
       memcpy(p, get_linklist0(i), offsetData_);
-      int dim = s->get_dim();
       float *vec_from = (float *)getDataByInternalId(i);
       uint16_t *code_to = (uint16_t *)(p + offsetData_);
       if (!IP) {
-        *(float *)code_to = ip(vec_from, dim);
+        *(float *)code_to = ip(vec_from, dim_true);
         code_to += 2;
+      float buf[1024] {};
+      memcpy(buf, vec_from, dim_true * 4); 
       }
-      for (int i = 0; i < dim; i += 8) {
-        auto x = _mm256_loadu_ps(vec_from + i);
+      for (int i = 0; i < dim_align; i += 8) {
+        auto x = _mm256_loadu_ps(buf + i);
         auto y = _mm256_cvtps_ph(x, 0);
         _mm_storeu_si128((__m128i *)(code_to + i), y);
       }
@@ -754,6 +754,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     data_size_ = s->get_data_size();
     fstdistfunc_ = s->get_dist_func();
     dist_func_param_ = s->get_dist_func_param();
+    dim_align = s->get_dim();
 
     auto pos = input.tellg();
 
@@ -796,18 +797,16 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       }
       return ans;
     };
-    size_t dim = s->get_dim();
     for (int i = 0; i < max_elements; ++i) {
       char *p = data_tmp + i * new_size;
       memcpy(p, get_linklist0(i), offsetData_);
-      int dim = s->get_dim();
       float *vec_from = (float *)getDataByInternalId(i);
       uint16_t *code_to = (uint16_t *)(p + offsetData_);
       if (!IP) {
-        *(float *)code_to = ip(vec_from, dim);
+        *(float *)code_to = ip(vec_from, dim_true);
         code_to += 2;
       }
-      for (int i = 0; i < dim; i += 8) {
+      for (int i = 0; i < dim_align; i += 8) {
         auto x = _mm256_loadu_ps(vec_from + i);
         auto y = _mm256_cvtps_ph(x, 0);
         _mm_storeu_si128((__m128i *)(code_to + i), y);
