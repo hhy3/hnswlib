@@ -155,7 +155,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
   std::unordered_set<tableint>
       deleted_elements;  // contains internal ids of deleted elements
 
-  void transform(bool IP, SpaceInterface<float>* s) {
+  void transform(bool IP, SpaceInterface<float> *s) {
     printf("before transform\n");
     data_size_ = s->get_data_size();
     fstdistfunc_ = s->get_dist_func();
@@ -419,26 +419,24 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     std::vector<bool> vis(max_elements_);
     vis[ep_id] = true;
 
+    constexpr int pref = 3;
     while (retset.has_next()) {
       auto [u, d, _] = retset.pop();
-
       int *data = (int *)get_linklist0(u);
       size_t size = data[0];
-
-      _mm_prefetch(getDataByInternalId(data[1]), _MM_HINT_T0);
-      _mm_prefetch((char *)(data + 2), _MM_HINT_T0);
-
+      for (int i = 1; i <= perf; ++i) {
+        _mm_prefetch(getDataByInternalId(data[i]));
+      }
       for (size_t j = 1; j <= size; j++) {
         int v = data[j];
-        _mm_prefetch(getDataByInternalId(data[j + 1]), _MM_HINT_T0);
-        if (!vis[v]) {
-          vis[v] = true;
-
-          char *currObj1 = getDataByInternalId(v);
-          dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
-
-          retset.insert({v, dist});
+        if (vis[v]) {
+          continue;
         }
+        vis[v] = true;
+        _mm_prefetch(getDataByInternalId(data[j + perf]));
+        char *currObj1 = getDataByInternalId(v);
+        dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
+        retset.insert({v, dist});
       }
     }
     std::vector<int> ret(K);
@@ -1356,6 +1354,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         tableint *datal = (tableint *)(data + 1);
         for (int i = 0; i < size; i++) {
           tableint cand = datal[i];
+          _mm_prefetch(getDataByInternalId(datal[i + 1]), _MM_HINT_T0);
           if (cand < 0 || cand > max_elements_)
             throw std::runtime_error("cand error");
           dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand),
