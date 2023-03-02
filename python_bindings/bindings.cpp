@@ -604,62 +604,22 @@ class Index {
     py::array_t<dist_t, py::array::c_style | py::array::forcecast> items(input);
     auto buffer = items.request();
     int* data_numpy_l;
-    size_t rows, features;
+    size_t features = buffer.shape[0];
 
     if (num_threads <= 0) num_threads = num_threads_default;
+    data_numpy_l = new int[k];
 
-    {
-      py::gil_scoped_release l;
-      get_input_array_shapes(buffer, &rows, &features);
-
-      // avoid using threads when the number of searches is small:
-      if (rows <= num_threads * 4) {
-        num_threads = 1;
-      }
-
-      data_numpy_l = new int[rows * k];
-
-      if (normalize == false) {
-        ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
-          std::vector<int> result =
-              appr_alg->searchKnn((void*)items.data(row), k);
-          if (result.size() != k)
-            throw std::runtime_error(
-                "Cannot return the results in a contigious 2D array. Probably "
-                "ef or M is too small");
-          for (int i = 0; i < k; ++i) {
-            data_numpy_l[row * k + i] = result[i];
-          }
-        });
-      } else {
-        std::vector<float> norm_array(num_threads * features);
-        ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
-          float* data = (float*)items.data(row);
-
-          size_t start_idx = threadId * dim;
-          normalize_vector((float*)items.data(row),
-                           (norm_array.data() + start_idx));
-
-          std::vector<int> result =
-              appr_alg->searchKnn((void*)(norm_array.data() + start_idx), k);
-          if (result.size() != k)
-            throw std::runtime_error(
-                "Cannot return the results in a contigious 2D array. Probably "
-                "ef or M is too small");
-          for (int i = 0; i < k; ++i) {
-            data_numpy_l[row * k + i] = result[i];
-          }
-        });
-      }
+    std::vector<int> result = appr_alg->searchKnn((void*)items.data(0), k);
+    for (int i = 0; i < k; ++i) {
+      data_numpy_l[k + i] = result[i];
     }
     py::capsule free_when_done_l(data_numpy_l, [](void* f) { delete[] f; });
 
-    return py::array_t<int>(
-        {rows, k},                       // shape
-        {k * sizeof(int), sizeof(int)},  // C-style contiguous strides for
-                                         // each index
-        data_numpy_l,                    // the data pointer
-        free_when_done_l);
+    return py::array_t<int>({k},            // shape
+                            {sizeof(int)},  // C-style contiguous strides for
+                                            // each index
+                            data_numpy_l,   // the data pointer
+                            free_when_done_l);
   }
 
   void markDeleted(size_t label) { appr_alg->markDelete(label); }

@@ -180,11 +180,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       memcpy(p, get_linklist0(i), offsetData_);
       float *vec_from = (float *)getDataByInternalId(i);
       uint16_t *code_to = (uint16_t *)(p + offsetData_);
+      float buf[1024]{};
+      memcpy(buf, vec_from, dim_true * 4);
       if (!IP) {
-        *(float *)code_to = ip(vec_from, dim_true);
+        *(float *)code_to = ip(buf, dim_true);
         code_to += 2;
-      float buf[1024] {};
-      memcpy(buf, vec_from, dim_true * 4); 
       }
       for (int i = 0; i < dim_align; i += 8) {
         auto x = _mm256_loadu_ps(buf + i);
