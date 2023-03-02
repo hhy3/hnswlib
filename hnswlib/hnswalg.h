@@ -424,7 +424,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       auto [u, d, _] = retset.pop();
       int *data = (int *)get_linklist0(u);
       size_t size = data[0];
-      for (int i = 1; i <= perf; ++i) {
+      for (int i = 1; i <= pref; ++i) {
         _mm_prefetch(getDataByInternalId(data[i]));
       }
       for (size_t j = 1; j <= size; j++) {
@@ -433,7 +433,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
           continue;
         }
         vis[v] = true;
-        _mm_prefetch(getDataByInternalId(data[j + perf]));
+        _mm_prefetch(getDataByInternalId(data[j + pref]));
         char *currObj1 = getDataByInternalId(v);
         dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
         retset.insert({v, dist});

@@ -380,9 +380,10 @@ class InnerProductSpace : public SpaceInterface<float> {
   ~InnerProductSpace() {}
 };
 
-float BBB(const void *X, const void *Y, const size_t d) {
+float BBB(const void *X, const void *Y, const void* Z) {
   const float *x = (const float *)X;
   const uint16_t *y = (const uint16_t *)Y;
+  size_t d = *(size_t*)Z;
   __m512 sum1 = _mm512_setzero_ps();
   const float *end = x + d;
   while (x < end) {
