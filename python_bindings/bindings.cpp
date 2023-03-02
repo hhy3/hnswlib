@@ -162,8 +162,9 @@ class Index {
   hnswlib::SpaceInterface<float>* l2space;
   hnswlib::SpaceInterface<float>* l2space1;
 
-  Index(const std::string& space_name, const int dim, sizee_t maxElements,
-        size_t efConstruction, int random_seed, bool allow_replace_deleted)
+  Index(const std::string& space_name, const int dim, size_t maxElements,
+        size_t M, size_t efConstruction, int random_seed,
+        bool allow_replace_deleted)
       : space_name(space_name), dim(dim) {
     printf("FUCK!!!\n");
     normalize = false;
@@ -865,9 +866,11 @@ PYBIND11_PLUGIN(pyknowhere) {
        * Index::addItems
        */
       .def(py::init(&Index<float>::createFromIndex), py::arg("index"))
-      .def(py::init<const std::string&, const int>(), py::arg("space"),
-           py::arg("dim"), py::arg("max_elements"), py::arg("M") = 16,
-           py::arg("ef_construction") = 200, py::arg("random_seed") = 100,
+      .def(py::init<const std::string&, const int, size_t, size_t, size_t, int,
+                    bool>(),
+           py::arg("space"), py::arg("dim"), py::arg("max_elements"),
+           py::arg("M") = 16, py::arg("ef_construction") = 200,
+           py::arg("random_seed") = 100,
            py::arg("allow_replace_deleted") = false)
       .def("search", &Index<float>::knnQuery_return_numpy, py::arg("data"),
            py::arg("k") = 1, py::arg("num_threads") = -1,
