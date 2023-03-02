@@ -672,7 +672,7 @@ class Index {
       if (normalize == false) {
         ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
           std::vector<int> result =
-              appr_alg->searchKnn((void*)items.data(row), k, p_idFilter);
+              appr_alg->searchKnn((void*)items.data(row), k);
           if (result.size() != k)
             throw std::runtime_error(
                 "Cannot return the results in a contigious 2D array. Probably "
@@ -692,7 +692,7 @@ class Index {
                            (norm_array.data() + start_idx));
 
           std::vector<int> result = appr_alg->searchKnn(
-              (void*)(norm_array.data() + start_idx), k, p_idFilter);
+              (void*)(norm_array.data() + start_idx), k);
           if (result.size() != k)
             throw std::runtime_error(
                 "Cannot return the results in a contigious 2D array. Probably "
@@ -734,254 +734,254 @@ class Index {
   size_t getCurrentCount() const { return appr_alg->cur_element_count; }
 };
 
-// template <typename dist_t, typename data_t = float>
-// class BFIndex {
-//  public:
-//   static const int ser_version = 1;  // serialization version
+template <typename dist_t, typename data_t = float>
+class BFIndex {
+ public:
+  static const int ser_version = 1;  // serialization version
 
-//   std::string space_name;
-//   int dim;
-//   bool index_inited;
-//   bool normalize;
+  std::string space_name;
+  int dim;
+  bool index_inited;
+  bool normalize;
 
-//   hnswlib::labeltype cur_l;
-//   hnswlib::BruteforceSearch<dist_t>* alg;
-//   hnswlib::SpaceInterface<float>* space;
+  hnswlib::labeltype cur_l;
+  hnswlib::BruteforceSearch<dist_t>* alg;
+  hnswlib::SpaceInterface<float>* space;
 
-//   BFIndex(const std::string& space_name, const int dim)
-//       : space_name(space_name), dim(dim) {
-//     normalize = false;
-//     if (space_name == "l2") {
-//       space = new hnswlib::L2Space(dim);
-//     } else if (space_name == "ip") {
-//       space = new hnswlib::InnerProductSpace(dim);
-//     } else if (space_name == "cosine") {
-//       space = new hnswlib::InnerProductSpace(dim);
-//       normalize = true;
-//     } else {
-//       throw std::runtime_error("Space name must be one of l2, ip, or cosine.");
-//     }
-//     alg = NULL;
-//     index_inited = false;
-//   }
+  BFIndex(const std::string& space_name, const int dim)
+      : space_name(space_name), dim(dim) {
+    normalize = false;
+    if (space_name == "l2") {
+      space = new hnswlib::L2Space(dim);
+    } else if (space_name == "ip") {
+      space = new hnswlib::InnerProductSpace(dim);
+    } else if (space_name == "cosine") {
+      space = new hnswlib::InnerProductSpace(dim);
+      normalize = true;
+    } else {
+      throw std::runtime_error("Space name must be one of l2, ip, or cosine.");
+    }
+    alg = NULL;
+    index_inited = false;
+  }
 
-//   ~BFIndex() {
-//     delete space;
-//     if (alg) delete alg;
-//   }
+  ~BFIndex() {
+    delete space;
+    if (alg) delete alg;
+  }
 
-//   void init_new_index(const size_t maxElements) {
-//     if (alg) {
-//       throw std::runtime_error("The index is already initiated.");
-//     }
-//     cur_l = 0;
-//     alg = new hnswlib::BruteforceSearch<dist_t>(space, maxElements);
-//     index_inited = true;
-//   }
+  void init_new_index(const size_t maxElements) {
+    if (alg) {
+      throw std::runtime_error("The index is already initiated.");
+    }
+    cur_l = 0;
+    alg = new hnswlib::BruteforceSearch<dist_t>(space, maxElements);
+    index_inited = true;
+  }
 
-//   void normalize_vector(float* data, float* norm_array) {
-//     float norm = 0.0f;
-//     for (int i = 0; i < dim; i++) norm += data[i] * data[i];
-//     norm = 1.0f / (sqrtf(norm) + 1e-30f);
-//     for (int i = 0; i < dim; i++) norm_array[i] = data[i] * norm;
-//   }
+  void normalize_vector(float* data, float* norm_array) {
+    float norm = 0.0f;
+    for (int i = 0; i < dim; i++) norm += data[i] * data[i];
+    norm = 1.0f / (sqrtf(norm) + 1e-30f);
+    for (int i = 0; i < dim; i++) norm_array[i] = data[i] * norm;
+  }
 
-//   void addItems(py::object input, py::object ids_ = py::none()) {
-//     py::array_t<dist_t, py::array::c_style | py::array::forcecast> items(input);
-//     auto buffer = items.request();
-//     size_t rows, features;
-//     get_input_array_shapes(buffer, &rows, &features);
+  void addItems(py::object input, py::object ids_ = py::none()) {
+    py::array_t<dist_t, py::array::c_style | py::array::forcecast> items(input);
+    auto buffer = items.request();
+    size_t rows, features;
+    get_input_array_shapes(buffer, &rows, &features);
 
-//     if (features != dim)
-//       throw std::runtime_error("Wrong dimensionality of the vectors");
+    if (features != dim)
+      throw std::runtime_error("Wrong dimensionality of the vectors");
 
-//     std::vector<size_t> ids = get_input_ids_and_check_shapes(ids_, rows);
+    std::vector<size_t> ids = get_input_ids_and_check_shapes(ids_, rows);
 
-//     {
-//       for (size_t row = 0; row < rows; row++) {
-//         size_t id = ids.size() ? ids.at(row) : cur_l + row;
-//         if (!normalize) {
-//           alg->addPoint((void*)items.data(row), (size_t)id);
-//         } else {
-//           std::vector<float> normalized_vector(dim);
-//           normalize_vector((float*)items.data(row), normalized_vector.data());
-//           alg->addPoint((void*)normalized_vector.data(), (size_t)id);
-//         }
-//       }
-//       cur_l += rows;
-//     }
-//   }
+    {
+      for (size_t row = 0; row < rows; row++) {
+        size_t id = ids.size() ? ids.at(row) : cur_l + row;
+        if (!normalize) {
+          alg->addPoint((void*)items.data(row), (size_t)id);
+        } else {
+          std::vector<float> normalized_vector(dim);
+          normalize_vector((float*)items.data(row), normalized_vector.data());
+          alg->addPoint((void*)normalized_vector.data(), (size_t)id);
+        }
+      }
+      cur_l += rows;
+    }
+  }
 
-//   void deleteVector(size_t label) { alg->removePoint(label); }
+  void deleteVector(size_t label) { alg->removePoint(label); }
 
-//   void saveIndex(const std::string& path_to_index) {
-//     alg->saveIndex(path_to_index);
-//   }
+  void saveIndex(const std::string& path_to_index) {
+    alg->saveIndex(path_to_index);
+  }
 
-//   void loadIndex(const std::string& path_to_index, size_t max_elements) {
-//     if (alg) {
-//       std::cerr << "Warning: Calling load_index for an already inited index. "
-//                    "Old index is being deallocated."
-//                 << std::endl;
-//       delete alg;
-//     }
-//     alg = new hnswlib::BruteforceSearch<dist_t>(space, path_to_index);
-//     cur_l = alg->cur_element_count;
-//     index_inited = true;
-//   }
+  void loadIndex(const std::string& path_to_index, size_t max_elements) {
+    if (alg) {
+      std::cerr << "Warning: Calling load_index for an already inited index. "
+                   "Old index is being deallocated."
+                << std::endl;
+      delete alg;
+    }
+    alg = new hnswlib::BruteforceSearch<dist_t>(space, path_to_index);
+    cur_l = alg->cur_element_count;
+    index_inited = true;
+  }
 
-//   py::object knnQuery_return_numpy(
-//       py::object input, size_t k = 1,
-//       const std::function<bool(hnswlib::labeltype)>& filter = nullptr) {
-//     py::array_t<dist_t, py::array::c_style | py::array::forcecast> items(input);
-//     auto buffer = items.request();
-//     hnswlib::labeltype* data_numpy_l;
-//     dist_t* data_numpy_d;
-//     size_t rows, features;
-//     {
-//       py::gil_scoped_release l;
+  py::object knnQuery_return_numpy(
+      py::object input, size_t k = 1,
+      const std::function<bool(hnswlib::labeltype)>& filter = nullptr) {
+    py::array_t<dist_t, py::array::c_style | py::array::forcecast> items(input);
+    auto buffer = items.request();
+    hnswlib::labeltype* data_numpy_l;
+    dist_t* data_numpy_d;
+    size_t rows, features;
+    {
+      py::gil_scoped_release l;
 
-//       get_input_array_shapes(buffer, &rows, &features);
+      get_input_array_shapes(buffer, &rows, &features);
 
-//       data_numpy_l = new hnswlib::labeltype[rows * k];
-//       data_numpy_d = new dist_t[rows * k];
+      data_numpy_l = new hnswlib::labeltype[rows * k];
+      data_numpy_d = new dist_t[rows * k];
 
-//       CustomFilterFunctor idFilter(filter);
-//       CustomFilterFunctor* p_idFilter = filter ? &idFilter : nullptr;
+      CustomFilterFunctor idFilter(filter);
+      CustomFilterFunctor* p_idFilter = filter ? &idFilter : nullptr;
 
-//       for (size_t row = 0; row < rows; row++) {
-//         std::vector<int> result =
-//             alg->searchKnn((void*)items.data(row), k, p_idFilter);
-//         for (int i = 0; i < k; ++i) {
-//           data_numpy_d[row * k + i] = result[i];
-//           data_numpy_l[row * k + i] = 0.0;
-//         }
-//       }
-//     }
+      for (size_t row = 0; row < rows; row++) {
+        std::vector<int> result =
+            alg->searchKnn((void*)items.data(row), k);
+        for (int i = 0; i < k; ++i) {
+          data_numpy_d[row * k + i] = result[i];
+          data_numpy_l[row * k + i] = 0.0;
+        }
+      }
+    }
 
-//     py::capsule free_when_done_l(data_numpy_l, [](void* f) { delete[] f; });
-//     py::capsule free_when_done_d(data_numpy_d, [](void* f) { delete[] f; });
+    py::capsule free_when_done_l(data_numpy_l, [](void* f) { delete[] f; });
+    py::capsule free_when_done_d(data_numpy_d, [](void* f) { delete[] f; });
 
-//     return py::make_tuple(
-//         py::array_t<hnswlib::labeltype>(
-//             {rows, k},  // shape
-//             {k * sizeof(hnswlib::labeltype),
-//              sizeof(hnswlib::labeltype)},  // C-style contiguous strides for
-//                                            // each index
-//             data_numpy_l,                  // the data pointer
-//             free_when_done_l),
-//         py::array_t<dist_t>(
-//             {rows, k},  // shape
-//             {k * sizeof(dist_t),
-//              sizeof(dist_t)},  // C-style contiguous strides for each index
-//             data_numpy_d,      // the data pointer
-//             free_when_done_d));
-//   }
-// };
+    return py::make_tuple(
+        py::array_t<hnswlib::labeltype>(
+            {rows, k},  // shape
+            {k * sizeof(hnswlib::labeltype),
+             sizeof(hnswlib::labeltype)},  // C-style contiguous strides for
+                                           // each index
+            data_numpy_l,                  // the data pointer
+            free_when_done_l),
+        py::array_t<dist_t>(
+            {rows, k},  // shape
+            {k * sizeof(dist_t),
+             sizeof(dist_t)},  // C-style contiguous strides for each index
+            data_numpy_d,      // the data pointer
+            free_when_done_d));
+  }
+};
 
-// PYBIND11_PLUGIN(hnswlib) {
-//   py::module m("hnswlib");
+PYBIND11_PLUGIN(hnswlib) {
+  py::module m("hnswlib");
 
-//   py::class_<Index<float>>(m, "Index")
-//       .def(py::init(&Index<float>::createFromParams), py::arg("params"))
-//       /* WARNING: Index::createFromIndex is not thread-safe with Index::addItems
-//        */
-//       .def(py::init(&Index<float>::createFromIndex), py::arg("index"))
-//       .def(py::init<const std::string&, const int>(), py::arg("space"),
-//            py::arg("dim"))
-//       .def("init_index", &Index<float>::init_new_index, py::arg("max_elements"),
-//            py::arg("M") = 16, py::arg("ef_construction") = 200,
-//            py::arg("random_seed") = 100,
-//            py::arg("allow_replace_deleted") = false)
-//       .def("knn_query", &Index<float>::knnQuery_return_numpy, py::arg("data"),
-//            py::arg("k") = 1, py::arg("num_threads") = -1,
-//            py::arg("filter") = py::none())
-//       .def("add_items", &Index<float>::addItems, py::arg("data"),
-//            py::arg("ids") = py::none(), py::arg("num_threads") = -1,
-//            py::arg("replace_deleted") = false)
-//       .def("get_items", &Index<float, float>::getDataReturnList,
-//            py::arg("ids") = py::none())
-//       .def("get_ids_list", &Index<float>::getIdsList)
-//       .def("set_ef", &Index<float>::set_ef, py::arg("ef"))
-//       .def("set_num_threads", &Index<float>::set_num_threads,
-//            py::arg("num_threads"))
-//       .def("save_index", &Index<float>::saveIndex, py::arg("path_to_index"))
-//       .def("load_index", &Index<float>::loadIndex, py::arg("path_to_index"),
-//            py::arg("max_elements") = 0,
-//            py::arg("allow_replace_deleted") = false)
-//       .def("mark_deleted", &Index<float>::markDeleted, py::arg("label"))
-//       .def("unmark_deleted", &Index<float>::unmarkDeleted, py::arg("label"))
-//       .def("resize_index", &Index<float>::resizeIndex, py::arg("new_size"))
-//       .def("get_max_elements", &Index<float>::getMaxElements)
-//       .def("get_current_count", &Index<float>::getCurrentCount)
-//       .def_readonly("space", &Index<float>::space_name)
-//       .def_readonly("dim", &Index<float>::dim)
-//       .def_readwrite("num_threads", &Index<float>::num_threads_default)
-//       .def_property(
-//           "ef",
-//           [](const Index<float>& index) {
-//             return index.index_inited ? index.appr_alg->ef_ : index.default_ef;
-//           },
-//           [](Index<float>& index, const size_t ef_) {
-//             index.default_ef = ef_;
-//             if (index.appr_alg) index.appr_alg->ef_ = ef_;
-//           })
-//       .def_property_readonly(
-//           "max_elements",
-//           [](const Index<float>& index) {
-//             return index.index_inited ? index.appr_alg->max_elements_ : 0;
-//           })
-//       .def_property_readonly(
-//           "element_count",
-//           [](const Index<float>& index) {
-//             return index.index_inited
-//                        ? (size_t)index.appr_alg->cur_element_count
-//                        : 0;
-//           })
-//       .def_property_readonly(
-//           "ef_construction",
-//           [](const Index<float>& index) {
-//             return index.index_inited ? index.appr_alg->ef_construction_ : 0;
-//           })
-//       .def_property_readonly("M",
-//                              [](const Index<float>& index) {
-//                                return index.index_inited ? index.appr_alg->M_
-//                                                          : 0;
-//                              })
+  py::class_<Index<float>>(m, "Index")
+      .def(py::init(&Index<float>::createFromParams), py::arg("params"))
+      /* WARNING: Index::createFromIndex is not thread-safe with Index::addItems
+       */
+      .def(py::init(&Index<float>::createFromIndex), py::arg("index"))
+      .def(py::init<const std::string&, const int>(), py::arg("space"),
+           py::arg("dim"))
+      .def("init_index", &Index<float>::init_new_index, py::arg("max_elements"),
+           py::arg("M") = 16, py::arg("ef_construction") = 200,
+           py::arg("random_seed") = 100,
+           py::arg("allow_replace_deleted") = false)
+      .def("knn_query", &Index<float>::knnQuery_return_numpy, py::arg("data"),
+           py::arg("k") = 1, py::arg("num_threads") = -1,
+           py::arg("filter") = py::none())
+      .def("add_items", &Index<float>::addItems, py::arg("data"),
+           py::arg("ids") = py::none(), py::arg("num_threads") = -1,
+           py::arg("replace_deleted") = false)
+      .def("get_items", &Index<float, float>::getDataReturnList,
+           py::arg("ids") = py::none())
+      .def("get_ids_list", &Index<float>::getIdsList)
+      .def("set_ef", &Index<float>::set_ef, py::arg("ef"))
+      .def("set_num_threads", &Index<float>::set_num_threads,
+           py::arg("num_threads"))
+      .def("save_index", &Index<float>::saveIndex, py::arg("path_to_index"))
+      .def("load_index", &Index<float>::loadIndex, py::arg("path_to_index"),
+           py::arg("max_elements") = 0,
+           py::arg("allow_replace_deleted") = false)
+      .def("mark_deleted", &Index<float>::markDeleted, py::arg("label"))
+      .def("unmark_deleted", &Index<float>::unmarkDeleted, py::arg("label"))
+      .def("resize_index", &Index<float>::resizeIndex, py::arg("new_size"))
+      .def("get_max_elements", &Index<float>::getMaxElements)
+      .def("get_current_count", &Index<float>::getCurrentCount)
+      .def_readonly("space", &Index<float>::space_name)
+      .def_readonly("dim", &Index<float>::dim)
+      .def_readwrite("num_threads", &Index<float>::num_threads_default)
+      .def_property(
+          "ef",
+          [](const Index<float>& index) {
+            return index.index_inited ? index.appr_alg->ef_ : index.default_ef;
+          },
+          [](Index<float>& index, const size_t ef_) {
+            index.default_ef = ef_;
+            if (index.appr_alg) index.appr_alg->ef_ = ef_;
+          })
+      .def_property_readonly(
+          "max_elements",
+          [](const Index<float>& index) {
+            return index.index_inited ? index.appr_alg->max_elements_ : 0;
+          })
+      .def_property_readonly(
+          "element_count",
+          [](const Index<float>& index) {
+            return index.index_inited
+                       ? (size_t)index.appr_alg->cur_element_count
+                       : 0;
+          })
+      .def_property_readonly(
+          "ef_construction",
+          [](const Index<float>& index) {
+            return index.index_inited ? index.appr_alg->ef_construction_ : 0;
+          })
+      .def_property_readonly("M",
+                             [](const Index<float>& index) {
+                               return index.index_inited ? index.appr_alg->M_
+                                                         : 0;
+                             })
 
-//       .def(py::pickle(
-//           [](const Index<float>& ind) {  // __getstate__
-//             return py::make_tuple(
-//                 ind.getIndexParams()); /* Return dict (wrapped in a tuple) that
-//                                           fully encodes state of the Index
-//                                           object */
-//           },
-//           [](py::tuple t) {  // __setstate__
-//             if (t.size() != 1) throw std::runtime_error("Invalid state!");
-//             return Index<float>::createFromParams(t[0].cast<py::dict>());
-//           }))
+      .def(py::pickle(
+          [](const Index<float>& ind) {  // __getstate__
+            return py::make_tuple(
+                ind.getIndexParams()); /* Return dict (wrapped in a tuple) that
+                                          fully encodes state of the Index
+                                          object */
+          },
+          [](py::tuple t) {  // __setstate__
+            if (t.size() != 1) throw std::runtime_error("Invalid state!");
+            return Index<float>::createFromParams(t[0].cast<py::dict>());
+          }))
 
-//       .def("__repr__", [](const Index<float>& a) {
-//         return "<hnswlib.Index(space='" + a.space_name +
-//                "', dim=" + std::to_string(a.dim) + ")>";
-//       });
+      .def("__repr__", [](const Index<float>& a) {
+        return "<hnswlib.Index(space='" + a.space_name +
+               "', dim=" + std::to_string(a.dim) + ")>";
+      });
 
-//   py::class_<BFIndex<float>>(m, "BFIndex")
-//       .def(py::init<const std::string&, const int>(), py::arg("space"),
-//            py::arg("dim"))
-//       .def("init_index", &BFIndex<float>::init_new_index,
-//            py::arg("max_elements"))
-//       .def("knn_query", &BFIndex<float>::knnQuery_return_numpy, py::arg("data"),
-//            py::arg("k") = 1, py::arg("filter") = py::none())
-//       .def("add_items", &BFIndex<float>::addItems, py::arg("data"),
-//            py::arg("ids") = py::none())
-//       .def("delete_vector", &BFIndex<float>::deleteVector, py::arg("label"))
-//       .def("save_index", &BFIndex<float>::saveIndex, py::arg("path_to_index"))
-//       .def("load_index", &BFIndex<float>::loadIndex, py::arg("path_to_index"),
-//            py::arg("max_elements") = 0)
-//       .def("__repr__", [](const BFIndex<float>& a) {
-//         return "<hnswlib.BFIndex(space='" + a.space_name +
-//                "', dim=" + std::to_string(a.dim) + ")>";
-//       });
-//   return m.ptr();
-// }
+  py::class_<BFIndex<float>>(m, "BFIndex")
+      .def(py::init<const std::string&, const int>(), py::arg("space"),
+           py::arg("dim"))
+      .def("init_index", &BFIndex<float>::init_new_index,
+           py::arg("max_elements"))
+      .def("knn_query", &BFIndex<float>::knnQuery_return_numpy, py::arg("data"),
+           py::arg("k") = 1, py::arg("filter") = py::none())
+      .def("add_items", &BFIndex<float>::addItems, py::arg("data"),
+           py::arg("ids") = py::none())
+      .def("delete_vector", &BFIndex<float>::deleteVector, py::arg("label"))
+      .def("save_index", &BFIndex<float>::saveIndex, py::arg("path_to_index"))
+      .def("load_index", &BFIndex<float>::loadIndex, py::arg("path_to_index"),
+           py::arg("max_elements") = 0)
+      .def("__repr__", [](const BFIndex<float>& a) {
+        return "<hnswlib.BFIndex(space='" + a.space_name +
+               "', dim=" + std::to_string(a.dim) + ")>";
+      });
+  return m.ptr();
+}
