@@ -186,6 +186,7 @@ class Index {
     index_inited = false;
     default_ef = 32;
     cur_l = 0;
+    num_threads_default = std::thread::hardware_concurrency();
     appr_alg = new hnswlib::HierarchicalNSW<dist_t>(l2space, maxElements, M,
                                                     efConstruction, random_seed,
                                                     allow_replace_deleted);

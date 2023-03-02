@@ -281,7 +281,7 @@ class L2SpaceFast : public SpaceInterface<float> {
 
  public:
   L2SpaceFast(size_t dim) {
-    dim_ = dim;
+    dim_ = (dim + 15) / 16 * 16;
     data_size_ = dim * sizeof(uint16_t) + sizeof(float);
     fstdistfunc_ = AAA;
   }
