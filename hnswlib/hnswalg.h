@@ -99,6 +99,10 @@ class NeighborSet {
 template <typename dist_t>
 class HierarchicalNSW : public AlgorithmInterface<dist_t> {
  public:
+  float q_buf[1024];
+  int dim_true;
+  int dim_align;
+
   static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
   static const unsigned char DELETE_MARK = 0x01;
 
@@ -172,6 +176,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       return ans;
     };
     size_t dim = s->get_dim();
+    dim_align = dim;
     for (int i = 0; i < max_elements_; ++i) {
       char *p = data_tmp + i * new_size;
       memcpy(p, get_linklist0(i), offsetData_);
@@ -210,6 +215,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
         element_levels_(max_elements),
         allow_replace_deleted_(allow_replace_deleted) {
+    dim_true = s->get_dim();
     max_elements_ = max_elements;
     num_deleted_ = 0;
     data_size_ = s->get_data_size();
@@ -425,7 +431,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       int *data = (int *)get_linklist0(u);
       size_t size = data[0];
       for (int i = 1; i <= pref; ++i) {
-        _mm_prefetch(getDataByInternalId(data[i]));
+        _mm_prefetch(getDataByInternalId(data[i]), _MM_HINT_T0);
       }
       for (size_t j = 1; j <= size; j++) {
         int v = data[j];
@@ -433,7 +439,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
           continue;
         }
         vis[v] = true;
-        _mm_prefetch(getDataByInternalId(data[j + pref]));
+        _mm_prefetch(getDataByInternalId(data[j + pref]), _MM_HINT_T0);
         char *currObj1 = getDataByInternalId(v);
         dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
         retset.insert({v, dist});
@@ -1336,9 +1342,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
   }
 
   std::vector<int> searchKnn(const void *query_data, size_t k) const {
+    const void *query_to_use = query_data;
+    if (dim_align != dim_true) {
+      memcpy(q_buf, query_data, dim_true * 4);
+      query_to_use = q_buf;
+    }
     tableint currObj = enterpoint_node_;
     dist_t curdist = fstdistfunc_(
-        query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
+        query_to_use, getDataByInternalId(enterpoint_node_), dist_func_param_);
 
     for (int level = maxlevel_; level > 0; level--) {
       bool changed = true;
@@ -1357,7 +1368,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
           _mm_prefetch(getDataByInternalId(datal[i + 1]), _MM_HINT_T0);
           if (cand < 0 || cand > max_elements_)
             throw std::runtime_error("cand error");
-          dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand),
+          dist_t d = fstdistfunc_(query_to_use, getDataByInternalId(cand),
                                   dist_func_param_);
 
           if (d < curdist) {
@@ -1369,7 +1380,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       }
     }
 
-    return searchBaseLayerST(currObj, query_data, std::max(ef_, k), k);
+    return searchBaseLayerST(currObj, query_to_use, std::max(ef_, k), k);
   }
 
   void checkIntegrity() {

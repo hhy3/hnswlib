@@ -8,7 +8,7 @@ import setuptools
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
-__version__ = '0.7.0'
+__version__ = '1.0'
 
 
 include_dirs = [
@@ -59,10 +59,13 @@ def has_flag(compiler, flagname):
 
 
 def cpp_flag(compiler):
-    """Return the -std=c++[11/14] compiler flag.
-    The c++14 is prefered over c++11 (when it is available).
+    """Return the -std=c++[11/14/17/20] compiler flag.
     """
-    if has_flag(compiler, '-std=c++14'):
+    if has_flag(compiler, '-std=c++20'):
+        return '-std=c++20'
+    elif has_flag(compiler, '-std=c++17'):
+        return '-std=c++17'
+    elif has_flag(compiler, '-std=c++14'):
         return '-std=c++14'
     elif has_flag(compiler, '-std=c++11'):
         return '-std=c++11'
@@ -75,7 +78,7 @@ class BuildExt(build_ext):
     """A custom build extension for adding compiler-specific options."""
     c_opts = {
         'msvc': ['/EHsc', '/openmp', '/O2'],
-        #'unix': ['-O3', '-march=native'],  # , '-w'
+        # 'unix': ['-O3', '-march=native'],  # , '-w'
         'unix': ['-O3'],  # , '-w'
     }
     if not os.environ.get("HNSWLIB_NO_NATIVE"):
@@ -99,12 +102,14 @@ class BuildExt(build_ext):
         ct = self.compiler.compiler_type
         opts = self.c_opts.get(ct, [])
         if ct == 'unix':
-            opts.append('-DVERSION_INFO="%s"' % self.distribution.get_version())
+            opts.append('-DVERSION_INFO="%s"' %
+                        self.distribution.get_version())
             opts.append(cpp_flag(self.compiler))
             if has_flag(self.compiler, '-fvisibility=hidden'):
                 opts.append('-fvisibility=hidden')
         elif ct == 'msvc':
-            opts.append('/DVERSION_INFO=\\"%s\\"' % self.distribution.get_version())
+            opts.append('/DVERSION_INFO=\\"%s\\"' %
+                        self.distribution.get_version())
 
         for ext in self.extensions:
             ext.extra_compile_args.extend(opts)
@@ -114,11 +119,10 @@ class BuildExt(build_ext):
 
 
 setup(
-    name='hnswlib',
+    name='pyknowhere',
     version=__version__,
-    description='hnswlib',
-    author='Yury Malkov and others',
-    url='https://github.com/yurymalkov/hnsw',
+    description='knowhere hnsw',
+    author='',
     long_description="""hnsw""",
     ext_modules=ext_modules,
     install_requires=['numpy'],
