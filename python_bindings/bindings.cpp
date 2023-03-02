@@ -678,8 +678,8 @@ class Index {
                 "Cannot return the results in a contigious 2D array. Probably "
                 "ef or M is too small");
           for (int i = 0; i < k; ++i) {
-            data_numpy_d[row * k + i] = result[i];
-            data_numpy_l[row * k + i] = 0.0;
+            data_numpy_l[row * k + i] = result[i];
+            data_numpy_d[row * k + i] = 0.0;
           }
         });
       } else {
@@ -698,8 +698,8 @@ class Index {
                 "Cannot return the results in a contigious 2D array. Probably "
                 "ef or M is too small");
           for (int i = 0; i < k; ++i) {
-            data_numpy_d[row * k + i] = result[i];
-            data_numpy_l[row * k + i] = 0.0;
+            data_numpy_l[row * k + i] = result[i];
+            data_numpy_d[row * k + i] = 0.0;
           }
         });
       }
@@ -853,8 +853,8 @@ class BFIndex {
         std::vector<int> result =
             alg->searchKnn((void*)items.data(row), k);
         for (int i = 0; i < k; ++i) {
-          data_numpy_d[row * k + i] = result[i];
-          data_numpy_l[row * k + i] = 0.0;
+          data_numpy_l[row * k + i] = result[i];
+          data_numpy_d[row * k + i] = 0.0;
         }
       }
     }

@@ -155,7 +155,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
   std::unordered_set<tableint>
       deleted_elements;  // contains internal ids of deleted elements
 
-  void transform(bool IP, SpaceInterface<float> *s) {
+  void transform(bool IP, SpaceInterface<float>* s) {
+    printf("before transform\n");
     data_size_ = s->get_data_size();
     fstdistfunc_ = s->get_dist_func();
     dist_func_param_ = s->get_dist_func_param();
@@ -190,6 +191,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     free(data_level0_memory_);
     data_level0_memory_ = data_tmp;
     size_data_per_element_ = new_size;
+    printf("after transform\n");
   }
 
   HierarchicalNSW(SpaceInterface<dist_t> *s) {}
