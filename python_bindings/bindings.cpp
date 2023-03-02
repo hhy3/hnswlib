@@ -162,7 +162,8 @@ class Index {
   hnswlib::SpaceInterface<float>* l2space;
   hnswlib::SpaceInterface<float>* l2space1;
 
-  Index(const std::string& space_name, const int dim)
+  Index(const std::string& space_name, const int dim, sizee_t maxElements,
+        size_t efConstruction, int random_seed, bool allow_replace_deleted)
       : space_name(space_name), dim(dim) {
     printf("FUCK!!!\n");
     normalize = false;
@@ -182,20 +183,7 @@ class Index {
     appr_alg = NULL;
     ep_added = true;
     index_inited = false;
-    num_threads_default = 1;
-    default_ef = 10;
-  }
-
-  ~Index() {
-    delete l2space;
-    if (appr_alg) delete appr_alg;
-  }
-
-  void init_new_index(size_t maxElements, size_t M, size_t efConstruction,
-                      size_t random_seed, bool allow_replace_deleted) {
-    if (appr_alg) {
-      throw std::runtime_error("The index is already initiated.");
-    }
+    default_ef = 32;
     cur_l = 0;
     appr_alg = new hnswlib::HierarchicalNSW<dist_t>(l2space, maxElements, M,
                                                     efConstruction, random_seed,
@@ -206,7 +194,15 @@ class Index {
     seed = random_seed;
   }
 
-  void set_ef(size_t ef) {
+  ~Index() {
+    delete l2space;
+    if (appr_alg) delete appr_alg;
+  }
+
+  void init_new_index(size_t maxElements, size_t M, size_t efConstruction,
+                      size_t random_seed, bool allow_replace_deleted) {}
+
+  void set_param(size_t ef) {
     default_ef = ef;
     if (appr_alg) appr_alg->ef_ = ef;
   }
@@ -297,6 +293,7 @@ class Index {
       cur_l += rows;
     }
     appr_alg->transform((space_name != "l2"), l2space1);
+    num_threads_default = 1;
   }
 
   std::vector<std::vector<data_t>> getDataReturnList(
@@ -859,8 +856,8 @@ class BFIndex {
   }
 };
 
-PYBIND11_PLUGIN(hnswlib) {
-  py::module m("hnswlib");
+PYBIND11_PLUGIN(pyknowhere) {
+  py::module m("pyknowhere");
 
   py::class_<Index<float>>(m, "Index")
       .def(py::init(&Index<float>::createFromParams), py::arg("params"))
@@ -869,10 +866,8 @@ PYBIND11_PLUGIN(hnswlib) {
        */
       .def(py::init(&Index<float>::createFromIndex), py::arg("index"))
       .def(py::init<const std::string&, const int>(), py::arg("space"),
-           py::arg("dim"))
-      .def("init", &Index<float>::init_new_index, py::arg("max_elements"),
-           py::arg("M") = 16, py::arg("ef_construction") = 200,
-           py::arg("random_seed") = 100,
+           py::arg("dim"), py::arg("max_elements"), py::arg("M") = 16,
+           py::arg("ef_construction") = 200, py::arg("random_seed") = 100,
            py::arg("allow_replace_deleted") = false)
       .def("search", &Index<float>::knnQuery_return_numpy, py::arg("data"),
            py::arg("k") = 1, py::arg("num_threads") = -1,
@@ -883,7 +878,7 @@ PYBIND11_PLUGIN(hnswlib) {
       .def("get_items", &Index<float, float>::getDataReturnList,
            py::arg("ids") = py::none())
       .def("get_ids_list", &Index<float>::getIdsList)
-      .def("set_ef", &Index<float>::set_ef, py::arg("ef"))
+      .def("set_params", &Index<float>::set_params, py::arg("ef"))
       .def("set_num_threads", &Index<float>::set_num_threads,
            py::arg("num_threads"))
       .def("save_index", &Index<float>::saveIndex, py::arg("path_to_index"))

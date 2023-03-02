@@ -32,7 +32,7 @@ extra_objects = []
 
 ext_modules = [
     Extension(
-        'hnswlib',
+        'pyknowhere',
         source_files,
         include_dirs=include_dirs,
         libraries=libraries,
@@ -121,7 +121,7 @@ setup(
     version=__version__,
     description='knowhere hnsw',
     author='',
-    long_description="""hnsw""",
+    long_description="""knowhere hnsw""",
     ext_modules=ext_modules,
     install_requires=['numpy'],
     cmdclass={'build_ext': BuildExt},
