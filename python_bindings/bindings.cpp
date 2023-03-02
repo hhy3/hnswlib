@@ -473,47 +473,6 @@ class Index {
     return py::dict(**params, **ann_params);
   }
 
-  static Index<float>* createFromParams(const py::dict d) {
-    // check serialization version
-    assert_true(((int)py::int_(Index<float>::ser_version)) >=
-                    d["ser_version"].cast<int>(),
-                "Invalid serialization version!");
-
-    auto space_name_ = d["space"].cast<std::string>();
-    auto dim_ = d["dim"].cast<int>();
-    auto index_inited_ = d["index_inited"].cast<bool>();
-
-    Index<float>* new_index = new Index<float>(space_name_, dim_);
-
-    /*  TODO: deserialize state of random generators into
-     * new_index->level_generator_ and new_index->update_probability_generator_
-     */
-    /*        for full reproducibility / state of generators is serialized
-     * inside Index::getIndexParams                      */
-    new_index->seed = d["seed"].cast<size_t>();
-
-    if (index_inited_) {
-      new_index->appr_alg = new hnswlib::HierarchicalNSW<dist_t>(
-          new_index->l2space, d["max_elements"].cast<size_t>(),
-          d["M"].cast<size_t>(), d["ef_construction"].cast<size_t>(),
-          new_index->seed);
-      new_index->cur_l = d["cur_element_count"].cast<size_t>();
-    }
-
-    new_index->index_inited = index_inited_;
-    new_index->ep_added = d["ep_added"].cast<bool>();
-    new_index->num_threads_default = d["num_threads"].cast<int>();
-    new_index->default_ef = d["ef"].cast<size_t>();
-
-    if (index_inited_) new_index->setAnnData(d);
-
-    return new_index;
-  }
-
-  static Index<float>* createFromIndex(const Index<float>& index) {
-    return createFromParams(index.getIndexParams());
-  }
-
   void setAnnData(const py::dict d) { /* WARNING: Index::setAnnData is not
                                          thread-safe with Index::addItems */
     std::unique_lock<std::mutex> templock(appr_alg->global);
@@ -861,11 +820,6 @@ PYBIND11_PLUGIN(pyknowhere) {
   py::module m("pyknowhere");
 
   py::class_<Index<float>>(m, "Index")
-      .def(py::init(&Index<float>::createFromParams), py::arg("params"))
-      /* WARNING: Index::createFromIndex is not thread-safe with
-       * Index::addItems
-       */
-      .def(py::init(&Index<float>::createFromIndex), py::arg("index"))
       .def(py::init<const std::string&, const int, size_t, size_t, size_t, int,
                     bool>(),
            py::arg("space"), py::arg("dim"), py::arg("max_elements"),
@@ -927,19 +881,6 @@ PYBIND11_PLUGIN(pyknowhere) {
                                return index.index_inited ? index.appr_alg->M_
                                                          : 0;
                              })
-
-      .def(py::pickle(
-          [](const Index<float>& ind) {  // __getstate__
-            return py::make_tuple(
-                ind.getIndexParams()); /* Return dict (wrapped in a tuple)
-                                          that fully encodes state of the
-                                          Index object */
-          },
-          [](py::tuple t) {  // __setstate__
-            if (t.size() != 1) throw std::runtime_error("Invalid state!");
-            return Index<float>::createFromParams(t[0].cast<py::dict>());
-          }))
-
       .def("__repr__", [](const Index<float>& a) {
         return "<hnswlib.Index(space='" + a.space_name +
                "', dim=" + std::to_string(a.dim) + ")>";
