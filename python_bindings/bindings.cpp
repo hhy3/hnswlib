@@ -599,19 +599,17 @@ class Index {
   }
 
   py::object knnQuery_return_numpy(
-      py::object input, size_t k = 1, int num_threads = -1,
+      py::object input, size_t k = 1, int num_threads = 1,
       const std::function<bool(hnswlib::labeltype)>& filter = nullptr) {
     py::array_t<dist_t, py::array::c_style | py::array::forcecast> items(input);
     auto buffer = items.request();
     int* data_numpy_l;
-    size_t features = buffer.shape[0];
 
-    if (num_threads <= 0) num_threads = num_threads_default;
     data_numpy_l = new int[k];
 
     std::vector<int> result = appr_alg->searchKnn((void*)items.data(0), k);
     for (int i = 0; i < k; ++i) {
-      data_numpy_l[k + i] = result[i];
+      data_numpy_l[i] = result[i];
     }
     py::capsule free_when_done_l(data_numpy_l, [](void* f) { delete[] f; });
 
