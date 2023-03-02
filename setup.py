@@ -59,11 +59,9 @@ def has_flag(compiler, flagname):
 
 
 def cpp_flag(compiler):
-    """Return the -std=c++[11/14/17/20] compiler flag.
+    """Return the -std=c++[11/14/17] compiler flag.
     """
-    if has_flag(compiler, '-std=c++20'):
-        return '-std=c++20'
-    elif has_flag(compiler, '-std=c++17'):
+    if has_flag(compiler, '-std=c++17'):
         return '-std=c++17'
     elif has_flag(compiler, '-std=c++14'):
         return '-std=c++14'

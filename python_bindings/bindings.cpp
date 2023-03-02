@@ -182,8 +182,7 @@ class Index {
     appr_alg = NULL;
     ep_added = true;
     index_inited = false;
-    num_threads_default = std::thread::hardware_concurrency();
-
+    num_threads_default = 1;
     default_ef = 10;
   }
 
@@ -871,14 +870,14 @@ PYBIND11_PLUGIN(hnswlib) {
       .def(py::init(&Index<float>::createFromIndex), py::arg("index"))
       .def(py::init<const std::string&, const int>(), py::arg("space"),
            py::arg("dim"))
-      .def("init_index", &Index<float>::init_new_index, py::arg("max_elements"),
+      .def("init", &Index<float>::init_new_index, py::arg("max_elements"),
            py::arg("M") = 16, py::arg("ef_construction") = 200,
            py::arg("random_seed") = 100,
            py::arg("allow_replace_deleted") = false)
-      .def("knn_query", &Index<float>::knnQuery_return_numpy, py::arg("data"),
+      .def("search", &Index<float>::knnQuery_return_numpy, py::arg("data"),
            py::arg("k") = 1, py::arg("num_threads") = -1,
            py::arg("filter") = py::none())
-      .def("add_items", &Index<float>::addItems, py::arg("data"),
+      .def("add", &Index<float>::addItems, py::arg("data"),
            py::arg("ids") = py::none(), py::arg("num_threads") = -1,
            py::arg("replace_deleted") = false)
       .def("get_items", &Index<float, float>::getDataReturnList,

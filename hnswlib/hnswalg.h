@@ -99,7 +99,7 @@ class NeighborSet {
 template <typename dist_t>
 class HierarchicalNSW : public AlgorithmInterface<dist_t> {
  public:
-  float q_buf[1024];
+  mutable float q_buf[1024];
   int dim_true;
   int dim_align;
 
