@@ -835,7 +835,7 @@ PYBIND11_PLUGIN(pyknowhere) {
       .def("get_items", &Index<float, float>::getDataReturnList,
            py::arg("ids") = py::none())
       .def("get_ids_list", &Index<float>::getIdsList)
-      .def("set_params", &Index<float>::set_params, py::arg("ef"))
+      .def("set_param", &Index<float>::set_param, py::arg("ef"))
       .def("set_num_threads", &Index<float>::set_num_threads,
            py::arg("num_threads"))
       .def("save_index", &Index<float>::saveIndex, py::arg("path_to_index"))
