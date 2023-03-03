@@ -161,12 +161,12 @@ class AlgorithmInterface {
   virtual void addPoint(const void *datapoint, labeltype label,
                         bool replace_deleted = false) = 0;
 
-  virtual std::vector<int> searchKnn(const void *, size_t) const = 0;
+  virtual void searchKnn(const void *, size_t, int *) const = 0;
 
   // Return k nearest neighbor in the order of closer fist
   virtual std::vector<int> searchKnnCloserFirst(const void *query_data,
                                                 size_t k) const {
-    return searchKnn(query_data, k);
+    return {};
   }
 
   virtual void saveIndex(const std::string &location) = 0;

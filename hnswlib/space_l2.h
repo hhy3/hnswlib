@@ -274,6 +274,44 @@ static float AAA(const void *x, const void *y, const void *z) {
   return *(float *)y - 2 * ipfp16(x, y + 4, dim);
 }
 
+float ipfp16_2(const void *X, const void *Y, const size_t d) {
+  const float *x = (const float *)X;
+  const uint16_t *y = (const uint16_t *)Y;
+  __m512 sum1 = _mm512_setzero_ps(), sum2 = _mm512_setzero_ps();
+  const float *end = x + d;
+  while (x < end) {
+    {
+      auto xx = _mm512_loadu_ps(x);
+      x += 16;
+      auto zz = _mm256_loadu_si256((__m256i *)y);
+      auto yy = _mm512_cvtph_ps(zz);
+      y += 16;
+      sum1 = _mm512_add_ps(sum1, _mm512_mul_ps(xx, yy));
+    }
+    {
+      auto xx = _mm512_loadu_ps(x);
+      x += 16;
+      auto zz = _mm256_loadu_si256((__m256i *)y);
+      auto yy = _mm512_cvtph_ps(zz);
+      y += 16;
+      sum2 = _mm512_add_ps(sum2, _mm512_mul_ps(xx, yy));
+    }
+  }
+  sum1 = _mm512_add_ps(sum1, sum2);
+  auto sumh = _mm256_add_ps(_mm512_castps512_ps256(sum1),
+                            _mm512_extractf32x8_ps(sum1, 1));
+  auto sumhh =
+      _mm_add_ps(_mm256_castps256_ps128(sumh), _mm256_extractf128_ps(sumh, 1));
+  auto tmp1 = _mm_add_ps(sumhh, _mm_movehl_ps(sumhh, sumhh));
+  auto tmp2 = _mm_add_ps(tmp1, _mm_movehdup_ps(tmp1));
+  return _mm_cvtss_f32(tmp2);
+}
+
+static float AAA2(const void *x, const void *y, const void *z) {
+  size_t dim = *(size_t *)z;
+  return *(float *)y - 2 * ipfp16_2(x, y + 4, dim);
+}
+
 class L2SpaceFast : public SpaceInterface<float> {
   DISTFUNC<float> fstdistfunc_;
   size_t data_size_;
@@ -283,7 +321,11 @@ class L2SpaceFast : public SpaceInterface<float> {
   L2SpaceFast(size_t dim) {
     dim_ = (dim + 15) / 16 * 16;
     data_size_ = dim_ * sizeof(uint16_t) + sizeof(float);
-    fstdistfunc_ = AAA;
+    if (dim_ % 32 == 0) {
+      fstdistfunc_ = AAA2;
+    } else {
+      fstdistfunc_ AAA;
+    }
   }
 
   size_t get_data_size() { return data_size_; }

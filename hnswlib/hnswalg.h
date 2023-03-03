@@ -412,8 +412,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     return top_candidates;
   }
 
-  std::vector<int> searchBaseLayerST(tableint ep_id, const void *data_point,
-                                     size_t ef, int K) const {
+  void searchBaseLayerST(tableint ep_id, const void *data_point, size_t ef,
+                         int K, int *dst) const {
     NeighborSet retset(ef);
 
     dist_t dist =
@@ -443,11 +443,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         retset.insert({v, dist});
       }
     }
-    std::vector<int> ret(K);
     for (int i = 0; i < K; ++i) {
-      ret[i] = retset.id(i);
+      dst[i] = retset.id(i);
     }
-    return ret;
   }
 
   void getNeighborsByHeuristic2(
@@ -1338,7 +1336,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     return cur_c;
   }
 
-  std::vector<int> searchKnn(const void *query_data, size_t k) const {
+  void searchKnn(const void *query_data, size_t k, int* dst) const {
     const void *query_to_use = query_data;
     if (dim_align != dim_true) {
       memcpy(q_buf, query_data, dim_true * 4);
@@ -1377,7 +1375,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       }
     }
 
-    return searchBaseLayerST(currObj, query_to_use, std::max(ef_, k), k);
+    searchBaseLayerST(currObj, query_to_use, std::max(ef_, k), k, dst);
   }
 
   void checkIntegrity() {

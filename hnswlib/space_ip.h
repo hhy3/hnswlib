@@ -403,6 +403,40 @@ float BBB(const void *X, const void *Y, const void *Z) {
   return 1.0f - _mm_cvtss_f32(tmp2);
 }
 
+float BBB2(const void *X, const void *Y, const void *Z) {
+  const float *x = (const float *)X;
+  const uint16_t *y = (const uint16_t *)Y;
+  size_t d = *(size_t *)Z;
+  __m512 sum1 = _mm512_setzero_ps(), sum2 = _mm512_setzero_ps();
+  const float *end = x + d;
+  while (x < end) {
+    {
+      auto xx = _mm512_loadu_ps(x);
+      x += 16;
+      auto zz = _mm256_loadu_si256((__m256i *)y);
+      auto yy = _mm512_cvtph_ps(zz);
+      y += 16;
+      sum1 = _mm512_add_ps(sum1, _mm512_mul_ps(xx, yy));
+    }
+    {
+      auto xx = _mm512_loadu_ps(x);
+      x += 16;
+      auto zz = _mm256_loadu_si256((__m256i *)y);
+      auto yy = _mm512_cvtph_ps(zz);
+      y += 16;
+      sum2 = _mm512_add_ps(sum2, _mm512_mul_ps(xx, yy));
+    }
+  }
+  sum1 = _mm512_add_ps(sum1, sum2);
+  auto sumh = _mm256_add_ps(_mm512_castps512_ps256(sum1),
+                            _mm512_extractf32x8_ps(sum1, 1));
+  auto sumhh =
+      _mm_add_ps(_mm256_castps256_ps128(sumh), _mm256_extractf128_ps(sumh, 1));
+  auto tmp1 = _mm_add_ps(sumhh, _mm_movehl_ps(sumhh, sumhh));
+  auto tmp2 = _mm_add_ps(tmp1, _mm_movehdup_ps(tmp1));
+  return 1.0f - _mm_cvtss_f32(tmp2);
+}
+
 class IPSpaceFast : public SpaceInterface<float> {
   DISTFUNC<float> fstdistfunc_;
   size_t data_size_;
@@ -412,7 +446,11 @@ class IPSpaceFast : public SpaceInterface<float> {
   IPSpaceFast(size_t dim) {
     dim_ = (dim + 15) / 16 * 16;
     data_size_ = dim_ * sizeof(uint16_t);
-    fstdistfunc_ = BBB;
+    if (dim_ % 32 == 0) {
+      fstdistfunc_ = BBB2;
+    } else {
+      fstdistfunc_ = BBB;
+    }
   }
 
   size_t get_data_size() { return data_size_; }

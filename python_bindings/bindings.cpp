@@ -598,26 +598,15 @@ class Index {
     }
   }
 
-  py::object knnQuery_return_numpy(
-      py::object input, size_t k = 1, int num_threads = 1,
-      const std::function<bool(hnswlib::labeltype)>& filter = nullptr) {
+  int data_numpy_l[10];
+  py::object knnQuery_return_numpy(py::object input, int k) {
     py::array_t<dist_t, py::array::c_style | py::array::forcecast> items(input);
-    auto buffer = items.request();
-    int* data_numpy_l;
-
-    data_numpy_l = new int[k];
-
-    std::vector<int> result = appr_alg->searchKnn((void*)items.data(0), k);
-    for (int i = 0; i < k; ++i) {
-      data_numpy_l[i] = result[i];
-    }
-    py::capsule free_when_done_l(data_numpy_l, [](void* f) { delete[] f; });
-
+    appr_alg->searchKnn((void*)items.data(0), k, data_numpy_l);
     return py::array_t<int>({k},            // shape
                             {sizeof(int)},  // C-style contiguous strides for
                                             // each index
-                            data_numpy_l,   // the data pointer
-                            free_when_done_l);
+                            data_numpy_l    // the data pointer
+    );
   }
 
   void markDeleted(size_t label) { appr_alg->markDelete(label); }
@@ -747,11 +736,7 @@ class BFIndex {
       CustomFilterFunctor* p_idFilter = filter ? &idFilter : nullptr;
 
       for (size_t row = 0; row < rows; row++) {
-        std::vector<int> result = alg->searchKnn((void*)items.data(row), k);
-        for (int i = 0; i < k; ++i) {
-          data_numpy_l[row * k + i] = result[i];
-          data_numpy_d[row * k + i] = 0.0;
-        }
+        alg->searchKnn((void*)items.data(row), k, nullptr);
       }
     }
 
@@ -786,8 +771,7 @@ PYBIND11_PLUGIN(pyknowhere) {
            py::arg("random_seed") = 100,
            py::arg("allow_replace_deleted") = false)
       .def("search", &Index<float>::knnQuery_return_numpy, py::arg("data"),
-           py::arg("k") = 1, py::arg("num_threads") = -1,
-           py::arg("filter") = py::none())
+           py::arg("k") = 1)
       .def("add", &Index<float>::addItems, py::arg("data"),
            py::arg("ids") = py::none(), py::arg("num_threads") = -1,
            py::arg("replace_deleted") = false)
