@@ -59,8 +59,10 @@ def has_flag(compiler, flagname):
 
 
 def cpp_flag(compiler):
-    """Return the -std=c++[11/14/17] compiler flag.
+    """Return the -std=c++[11/14/17/20] compiler flag.
     """
+    if has_flag(compiler, '-std=c++20'):
+        return '-std=c++20'
     if has_flag(compiler, '-std=c++17'):
         return '-std=c++17'
     elif has_flag(compiler, '-std=c++14'):
@@ -75,26 +77,15 @@ def cpp_flag(compiler):
 class BuildExt(build_ext):
     """A custom build extension for adding compiler-specific options."""
     c_opts = {
-        'msvc': ['/EHsc', '/openmp', '/O2'],
-        # 'unix': ['-O3', '-march=native'],  # , '-w'
-        'unix': ['-O3'],  # , '-w'
+        'unix': "-Ofast -lrt -DNDEBUG -march=native -fpic -fopenmp -ftree-vectorize -ftree-vectorizer-verbose=0".split()
     }
-    if not os.environ.get("HNSWLIB_NO_NATIVE"):
-        c_opts['unix'].append('-march=native')
 
     link_opts = {
         'unix': [],
-        'msvc': [],
     }
 
-    if sys.platform == 'darwin':
-        if platform.machine() == 'arm64':
-            c_opts['unix'].remove('-march=native')
-        c_opts['unix'] += ['-stdlib=libc++', '-mmacosx-version-min=10.7']
-        link_opts['unix'] += ['-stdlib=libc++', '-mmacosx-version-min=10.7']
-    else:
-        c_opts['unix'].append("-fopenmp")
-        link_opts['unix'].extend(['-fopenmp', '-pthread'])
+    c_opts['unix'].append("-fopenmp")
+    link_opts['unix'].extend(['-fopenmp', '-pthread'])
 
     def build_extensions(self):
         ct = self.compiler.compiler_type

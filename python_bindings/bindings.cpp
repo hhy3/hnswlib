@@ -70,16 +70,10 @@ inline void ParallelFor(size_t start, size_t end, size_t numThreads,
     for (auto& thread : threads) {
       thread.join();
     }
-    if (lastException) {
-      std::rethrow_exception(lastException);
-    }
   }
 }
 
-inline void assert_true(bool expr, const std::string& msg) {
-  if (expr == false) throw std::runtime_error("Unpickle Error: " + msg);
-  return;
-}
+inline void assert_true(bool expr, const std::string& msg) { return; }
 
 class CustomFilterFunctor : public hnswlib::BaseFilterFunctor {
   std::function<bool(hnswlib::labeltype)> filter;
@@ -101,7 +95,6 @@ inline void get_input_array_shapes(const py::buffer_info& buffer, size_t* rows,
              "Input vector data wrong shape. Number of dimensions %d. Data "
              "must be a 1D or 2D array.",
              buffer.ndim);
-    throw std::runtime_error(msg);
   }
   if (buffer.ndim == 2) {
     *rows = buffer.shape[0];
@@ -126,7 +119,6 @@ inline std::vector<size_t> get_input_ids_and_check_shapes(
                "The input label shape %d does not match the input data vector "
                "shape %d",
                ids_numpy.ndim, feature_rows);
-      throw std::runtime_error(msg);
     }
     // extract data
     if (ids_numpy.ndim == 1) {
@@ -179,7 +171,6 @@ class Index {
       l2space1 = new hnswlib::IPSpaceFast(dim);
       normalize = true;
     } else {
-      throw std::runtime_error("Space name must be one of l2, ip, or cosine.");
     }
     appr_alg = NULL;
     ep_added = true;
@@ -247,9 +238,6 @@ class Index {
     size_t rows, features;
     get_input_array_shapes(buffer, &rows, &features);
 
-    if (features != dim)
-      throw std::runtime_error("Wrong dimensionality of the vectors");
-
     // avoid using threads when the number of additions is small:
     if (rows <= num_threads * 4) {
       num_threads = 1;
@@ -307,9 +295,6 @@ class Index {
       auto ids_numpy = items.request();
 
       if (ids_numpy.ndim == 0) {
-        throw std::invalid_argument(
-            "get_items accepts a list of indices and returns a list of "
-            "vectors");
       } else {
         std::vector<size_t> ids1(ids_numpy.shape[0]);
         for (size_t i = 0; i < ids1.size(); i++) {
@@ -536,7 +521,6 @@ class Index {
 
     for (size_t i = 0; i < appr_alg->cur_element_count; i++) {
       if (label_lookup_val_npy.data()[i] < 0) {
-        throw std::runtime_error("Internal id cannot be negative!");
       } else {
         appr_alg->label_lookup_.insert(std::make_pair(
             label_lookup_key_npy.data()[i], label_lookup_val_npy.data()[i]));
@@ -571,11 +555,9 @@ class Index {
       } else {
         appr_alg->linkLists_[i] = (char*)malloc(linkListSize);
         if (appr_alg->linkLists_[i] == nullptr)
-          throw std::runtime_error(
-              "Not enough memory: loadIndex failed to allocate linklist");
 
-        memcpy(appr_alg->linkLists_[i],
-               link_list_npy.data() + link_npy_offsets[i], linkListSize);
+          memcpy(appr_alg->linkLists_[i],
+                 link_list_npy.data() + link_npy_offsets[i], linkListSize);
       }
     }
 
@@ -598,15 +580,11 @@ class Index {
     }
   }
 
-  int data_numpy_l[10];
+  alignas(64) int data_numpy_l[16];
   py::object knnQuery_return_numpy(py::object input, int k) {
     py::array_t<dist_t, py::array::c_style | py::array::forcecast> items(input);
     appr_alg->searchKnn((void*)items.data(0), k, data_numpy_l);
-    return py::array_t<int>({k},            // shape
-                            {sizeof(int)},  // C-style contiguous strides for
-                                            // each index
-                            data_numpy_l    // the data pointer
-    );
+    return py::array_t<int>({k}, {sizeof(int)}, data_numpy_l);
   }
 
   void markDeleted(size_t label) { appr_alg->markDelete(label); }
@@ -645,7 +623,6 @@ class BFIndex {
       space = new hnswlib::InnerProductSpace(dim);
       normalize = true;
     } else {
-      throw std::runtime_error("Space name must be one of l2, ip, or cosine.");
     }
     alg = NULL;
     index_inited = false;
@@ -658,7 +635,6 @@ class BFIndex {
 
   void init_new_index(const size_t maxElements) {
     if (alg) {
-      throw std::runtime_error("The index is already initiated.");
     }
     cur_l = 0;
     alg = new hnswlib::BruteforceSearch<dist_t>(space, maxElements);
@@ -677,9 +653,6 @@ class BFIndex {
     auto buffer = items.request();
     size_t rows, features;
     get_input_array_shapes(buffer, &rows, &features);
-
-    if (features != dim)
-      throw std::runtime_error("Wrong dimensionality of the vectors");
 
     std::vector<size_t> ids = get_input_ids_and_check_shapes(ids_, rows);
 

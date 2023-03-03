@@ -139,6 +139,8 @@ static void readBinaryPOD(std::istream &in, T &podRef) {
 
 template <typename MTYPE>
 using DISTFUNC = MTYPE (*)(const void *, const void *, const void *);
+template <typename MTYPE, int D>
+using DISTFUNC2 = MTYPE (*)(const void *, const void *);
 
 template <typename MTYPE>
 class SpaceInterface {

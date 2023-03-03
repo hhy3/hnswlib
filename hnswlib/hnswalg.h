@@ -97,7 +97,7 @@ class NeighborSet {
 };
 
 template <typename dist_t>
-class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+class HierarchicalNSW {
  public:
   mutable float q_buf[1024];
   int dim_true;
@@ -237,8 +237,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     data_level0_memory_ =
         (char *)malloc(max_elements_ * size_data_per_element_);
-    if (data_level0_memory_ == nullptr)
-      throw std::runtime_error("Not enough memory");
 
     cur_element_count = 0;
 
@@ -249,9 +247,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     maxlevel_ = -1;
 
     linkLists_ = (char **)malloc(sizeof(void *) * max_elements_);
-    if (linkLists_ == nullptr)
-      throw std::runtime_error(
-          "Not enough memory: HierarchicalNSW failed to allocate linklists");
     size_links_per_element_ =
         maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
     mult_ = 1 / log(1.0 * M_);
@@ -523,9 +518,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       int level, bool isUpdate) {
     size_t Mcurmax = level ? maxM_ : maxM0_;
     getNeighborsByHeuristic2(top_candidates, M_);
-    if (top_candidates.size() > M_)
-      throw std::runtime_error(
-          "Should be not be more than M_ candidates returned by the heuristic");
 
     std::vector<tableint> selectedNeighbors;
     selectedNeighbors.reserve(M_);
@@ -550,18 +542,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       else
         ll_cur = get_linklist(cur_c, level);
 
-      if (*ll_cur && !isUpdate) {
-        throw std::runtime_error(
-            "The newly inserted element should have blank link list");
-      }
       setListCount(ll_cur, selectedNeighbors.size());
       tableint *data = (tableint *)(ll_cur + 1);
       for (size_t idx = 0; idx < selectedNeighbors.size(); idx++) {
-        if (data[idx] && !isUpdate)
-          throw std::runtime_error("Possible memory corruption");
-        if (level > element_levels_[selectedNeighbors[idx]])
-          throw std::runtime_error(
-              "Trying to make a link on a non-existent level");
 
         data[idx] = selectedNeighbors[idx];
       }
@@ -579,13 +562,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
       size_t sz_link_list_other = getListCount(ll_other);
 
-      if (sz_link_list_other > Mcurmax)
-        throw std::runtime_error("Bad value of sz_link_list_other");
-      if (selectedNeighbors[idx] == cur_c)
-        throw std::runtime_error("Trying to connect an element to itself");
-      if (level > element_levels_[selectedNeighbors[idx]])
-        throw std::runtime_error(
-            "Trying to make a link on a non-existent level");
 
       tableint *data = (tableint *)(ll_other + 1);
 
@@ -656,10 +632,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
   }
 
   void resizeIndex(size_t new_max_elements) {
-    if (new_max_elements < cur_element_count)
-      throw std::runtime_error(
-          "Cannot resize, max element is less than the current number of "
-          "elements");
 
     delete visited_list_pool_;
     visited_list_pool_ = new VisitedListPool(1, new_max_elements);
@@ -671,17 +643,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     // Reallocate base layer
     char *data_level0_memory_new = (char *)realloc(
         data_level0_memory_, new_max_elements * size_data_per_element_);
-    if (data_level0_memory_new == nullptr)
-      throw std::runtime_error(
-          "Not enough memory: resizeIndex failed to allocate base layer");
     data_level0_memory_ = data_level0_memory_new;
 
     // Reallocate all other layers
     char **linkLists_new =
         (char **)realloc(linkLists_, sizeof(void *) * new_max_elements);
-    if (linkLists_new == nullptr)
-      throw std::runtime_error(
-          "Not enough memory: resizeIndex failed to allocate other layers");
     linkLists_ = linkLists_new;
 
     max_elements_ = new_max_elements;
@@ -723,8 +689,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                  size_t max_elements_i = 0, bool IP = false) {
     std::ifstream input(location, std::ios::binary);
 
-    if (!input.is_open()) throw std::runtime_error("Cannot open file");
-
     // get file size:
     input.seekg(0, input.end);
     std::streampos total_filesize = input.tellg();
@@ -759,9 +723,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     /// Optional - check if index is ok:
     input.seekg(cur_element_count * size_data_per_element_, input.cur);
     for (size_t i = 0; i < cur_element_count; i++) {
-      if (input.tellg() < 0 || input.tellg() >= total_filesize) {
-        throw std::runtime_error("Index seems to be corrupted or unsupported");
-      }
 
       unsigned int linkListSize;
       readBinaryPOD(input, linkListSize);
@@ -770,19 +731,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       }
     }
 
-    // throw exception if it either corrupted or old index
-    if (input.tellg() != total_filesize)
-      throw std::runtime_error("Index seems to be corrupted or unsupported");
-
     input.clear();
     /// Optional check end
 
     input.seekg(pos, input.beg);
 
     data_level0_memory_ = (char *)malloc(max_elements * size_data_per_element_);
-    if (data_level0_memory_ == nullptr)
-      throw std::runtime_error(
-          "Not enough memory: loadIndex failed to allocate level0");
     input.read(data_level0_memory_, cur_element_count * size_data_per_element_);
 
     auto new_size = offsetData_ + data_size_;
@@ -824,9 +778,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     visited_list_pool_ = new VisitedListPool(1, max_elements);
 
     linkLists_ = (char **)malloc(sizeof(void *) * max_elements);
-    if (linkLists_ == nullptr)
-      throw std::runtime_error(
-          "Not enough memory: loadIndex failed to allocate linklists");
     element_levels_ = std::vector<int>(max_elements);
     revSize_ = 1.0 / mult_;
     ef_ = 10;
@@ -840,9 +791,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       } else {
         element_levels_[i] = linkListSize / size_links_per_element_;
         linkLists_[i] = (char *)malloc(linkListSize);
-        if (linkLists_[i] == nullptr)
-          throw std::runtime_error(
-              "Not enough memory: loadIndex failed to allocate linklist");
         input.read(linkLists_[i], linkListSize);
       }
     }
@@ -866,9 +814,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     std::unique_lock<std::mutex> lock_table(label_lookup_lock);
     auto search = label_lookup_.find(label);
-    if (search == label_lookup_.end() || isMarkedDeleted(search->second)) {
-      throw std::runtime_error("Label not found");
-    }
     tableint internalId = search->second;
     lock_table.unlock();
 
@@ -893,9 +838,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     std::unique_lock<std::mutex> lock_table(label_lookup_lock);
     auto search = label_lookup_.find(label);
-    if (search == label_lookup_.end()) {
-      throw std::runtime_error("Label not found");
-    }
     tableint internalId = search->second;
     lock_table.unlock();
 
@@ -919,8 +861,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         deleted_elements.insert(internalId);
       }
     } else {
-      throw std::runtime_error(
-          "The requested to delete element is already deleted");
     }
   }
 
@@ -938,9 +878,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     std::unique_lock<std::mutex> lock_table(label_lookup_lock);
     auto search = label_lookup_.find(label);
-    if (search == label_lookup_.end()) {
-      throw std::runtime_error("Label not found");
-    }
     tableint internalId = search->second;
     lock_table.unlock();
 
@@ -962,8 +899,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         deleted_elements.erase(internalId);
       }
     } else {
-      throw std::runtime_error(
-          "The requested to undelete element is not deleted");
     }
   }
 
@@ -991,10 +926,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
    */
   void addPoint(const void *data_point, labeltype label,
                 bool replace_deleted = false) {
-    if ((allow_replace_deleted_ == false) && (replace_deleted == true)) {
-      throw std::runtime_error(
-          "Replacement of deleted elements is disabled in constructor");
-    }
 
     // lock all operations with element by label
     std::unique_lock<std::mutex> lock_label(getLabelOpMutex(label));
@@ -1157,9 +1088,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       }
     }
 
-    if (dataPointLevel > maxLevel)
-      throw std::runtime_error(
-          "Level of item to be updated cannot be bigger than max level");
 
     for (int level = dataPointLevel; level >= 0; level--) {
       std::priority_queue<std::pair<dist_t, tableint>,
@@ -1218,13 +1146,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
       auto search = label_lookup_.find(label);
       if (search != label_lookup_.end()) {
         tableint existingInternalId = search->second;
-        if (allow_replace_deleted_) {
-          if (isMarkedDeleted(existingInternalId)) {
-            throw std::runtime_error(
-                "Can't use addPoint to update deleted elements if replacement "
-                "of deleted elements is enabled.");
-          }
-        }
         lock_table.unlock();
 
         if (isMarkedDeleted(existingInternalId)) {
@@ -1233,11 +1154,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         updatePoint(data_point, existingInternalId, 1.0);
 
         return existingInternalId;
-      }
-
-      if (cur_element_count >= max_elements_) {
-        throw std::runtime_error(
-            "The number of elements exceeds the specified limit");
       }
 
       cur_c = cur_element_count;
@@ -1267,9 +1183,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     if (curlevel) {
       linkLists_[cur_c] =
           (char *)malloc(size_links_per_element_ * curlevel + 1);
-      if (linkLists_[cur_c] == nullptr)
-        throw std::runtime_error(
-            "Not enough memory: addPoint failed to allocate linklist");
       memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
     }
 
@@ -1289,8 +1202,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             tableint *datal = (tableint *)(data + 1);
             for (int i = 0; i < size; i++) {
               tableint cand = datal[i];
-              if (cand < 0 || cand > max_elements_)
-                throw std::runtime_error("cand error");
               dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand),
                                       dist_func_param_);
               if (d < curdist) {
@@ -1305,8 +1216,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
       bool epDeleted = isMarkedDeleted(enterpoint_copy);
       for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
-        if (level > maxlevelcopy || level < 0)  // possible?
-          throw std::runtime_error("Level error");
 
         std::priority_queue<std::pair<dist_t, tableint>,
                             std::vector<std::pair<dist_t, tableint>>,
@@ -1361,8 +1270,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         for (int i = 0; i < size; i++) {
           tableint cand = datal[i];
           _mm_prefetch(getDataByInternalId(datal[i + 1]), _MM_HINT_T0);
-          if (cand < 0 || cand > max_elements_)
-            throw std::runtime_error("cand error");
           dist_t d = fstdistfunc_(query_to_use, getDataByInternalId(cand),
                                   dist_func_param_);
 

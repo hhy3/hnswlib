@@ -47,9 +47,6 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
     dist_func_param_ = s->get_dist_func_param();
     size_per_element_ = data_size_ + sizeof(labeltype);
     data_ = (char *)malloc(maxElements * size_per_element_);
-    if (data_ == nullptr)
-      throw std::runtime_error(
-          "Not enough memory: BruteforceSearch failed to allocate data");
     cur_element_count = 0;
   }
 
@@ -65,10 +62,6 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
       if (search != dict_external_to_internal.end()) {
         idx = search->second;
       } else {
-        if (cur_element_count >= maxelements_) {
-          throw std::runtime_error(
-              "The number of elements exceeds the specified limit\n");
-        }
         idx = cur_element_count;
         dict_external_to_internal[label] = idx;
         cur_element_count++;
@@ -122,9 +115,6 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
     dist_func_param_ = s->get_dist_func_param();
     size_per_element_ = data_size_ + sizeof(labeltype);
     data_ = (char *)malloc(maxelements_ * size_per_element_);
-    if (data_ == nullptr)
-      throw std::runtime_error(
-          "Not enough memory: loadIndex failed to allocate data");
 
     input.read(data_, maxelements_ * size_per_element_);
 

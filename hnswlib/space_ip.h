@@ -381,6 +381,7 @@ class InnerProductSpace : public SpaceInterface<float> {
 };
 
 float BBB(const void *X, const void *Y, const void *Z) {
+#ifdef __AVX512F__
   const float *x = (const float *)X;
   const uint16_t *y = (const uint16_t *)Y;
   size_t d = *(size_t *)Z;
@@ -401,9 +402,13 @@ float BBB(const void *X, const void *Y, const void *Z) {
   auto tmp1 = _mm_add_ps(sumhh, _mm_movehl_ps(sumhh, sumhh));
   auto tmp2 = _mm_add_ps(tmp1, _mm_movehdup_ps(tmp1));
   return 1.0f - _mm_cvtss_f32(tmp2);
+#else
+  return 0.0;
+#endif
 }
 
 float BBB2(const void *X, const void *Y, const void *Z) {
+#ifdef __AVX512F__
   const float *x = (const float *)X;
   const uint16_t *y = (const uint16_t *)Y;
   size_t d = *(size_t *)Z;
@@ -435,6 +440,9 @@ float BBB2(const void *X, const void *Y, const void *Z) {
   auto tmp1 = _mm_add_ps(sumhh, _mm_movehl_ps(sumhh, sumhh));
   auto tmp2 = _mm_add_ps(tmp1, _mm_movehdup_ps(tmp1));
   return 1.0f - _mm_cvtss_f32(tmp2);
+#else
+  return 0.0;
+#endif
 }
 
 class IPSpaceFast : public SpaceInterface<float> {
